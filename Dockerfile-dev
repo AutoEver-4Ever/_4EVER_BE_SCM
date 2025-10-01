@@ -1,0 +1,34 @@
+FROM gradle:7.6.1-jdk17 AS build
+WORKDIR /app
+
+# Gradle 래퍼와 빌드 파일들을 먼저 복사하여 캐싱 활용
+COPY gradle gradle
+COPY gradlew .
+COPY build.gradle .
+COPY settings.gradle .
+
+# 의존성 다운로드 (캐싱을 위해 별도 실행)
+RUN chmod +x ./gradlew
+RUN ./gradlew dependencies
+
+# 소스 코드 복사
+COPY src src
+
+# 테스트 제외하고 빌드
+RUN ./gradlew clean build -x test
+
+FROM openjdk:17-slim
+WORKDIR /app
+
+# curl 설치 (healthcheck용)
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# JAR 파일 복사
+COPY --from=build /app/build/libs/*.jar app.jar
+
+EXPOSE 8086
+
+# 개발 환경용 JVM 옵션
+ENV JAVA_OPTS="-Xms256m -Xmx512m -Dspring.profiles.active=dev"
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
