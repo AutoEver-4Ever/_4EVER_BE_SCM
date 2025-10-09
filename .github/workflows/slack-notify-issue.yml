@@ -1,0 +1,73 @@
+name: Slack 알림 - 이슈
+
+on:
+  issues:
+    types: [opened, closed, reopened]
+
+jobs:
+  notify-slack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 이슈 상태 설정
+        id: issue-status
+        run: |
+          if [ "${{ github.event.action }}" == "opened" ]; then
+            echo "status=생성됨" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.action }}" == "closed" ]; then
+            echo "status=종료됨" >> $GITHUB_OUTPUT
+          else
+            echo "status=재오픈됨" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Slack 알림 전송
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -X POST $SLACK_WEBHOOK_URL \
+          -H 'Content-Type: application/json' \
+          -d '{
+            "text": "GitHub 이슈 ${{ steps.issue-status.outputs.status }}",
+            "blocks": [
+              {
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": "🐛 이슈 ${{ steps.issue-status.outputs.status }}: #${{ github.event.issue.number }}",
+                  "emoji": true
+                }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "*저장소:*\n${{ github.repository }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*작성자:*\n${{ github.event.issue.user.login }}"
+                  }
+                ]
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*제목:*\n${{ github.event.issue.title }}"
+                }
+              },
+              {
+                "type": "actions",
+                "elements": [
+                  {
+                    "type": "button",
+                    "text": {
+                      "type": "plain_text",
+                      "text": "이슈 보기"
+                    },
+                    "url": "${{ github.event.issue.html_url }}"
+                  }
+                ]
+              }
+            ]
+          }'

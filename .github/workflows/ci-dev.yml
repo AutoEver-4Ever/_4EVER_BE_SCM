@@ -1,0 +1,188 @@
+name: CI - Development
+
+on:
+  push:
+    branches:
+      - dev
+  pull_request:
+    branches:
+      - dev
+
+jobs:
+  test:
+    name: 단위 테스트
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: JDK 17 설정
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Gradle 실행 권한 부여
+        run: chmod +x gradlew
+
+      - name: Gradle 의존성 캐시
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: 단위 테스트 실행
+        run: ./gradlew test --no-daemon
+
+      - name: 테스트 결과 파일 확인
+        id: test-results
+        if: always()
+        run: |
+          if find . -path '**/build/test-results/test/*.xml' -type f | grep -q .; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 테스트 리포트 생성
+        if: always() && steps.test-results.outputs.exists == 'true'
+        uses: dorny/test-reporter@v1
+        with:
+          name: 테스트 결과
+          path: '**/build/test-results/test/*.xml'
+          reporter: java-junit
+          fail-on-error: true
+
+      - name: 테스트 커버리지 리포트 업로드
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: build/reports/tests/test/
+          retention-days: 7
+
+  build-docker:
+    name: Docker 이미지 빌드
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Docker Buildx 설정
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker 이미지 빌드 (Dev)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile-dev
+          push: false
+          tags: scm-service:dev-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Docker 이미지 빌드 (Prod)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: scm-service:prod-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  notify:
+    name: Slack 알림
+    runs-on: ubuntu-latest
+    needs: [test, build-docker]
+    if: always()
+
+    steps:
+      - name: CI 결과 설정
+        id: ci-result
+        run: |
+          if [ "${{ needs.test.result }}" == "success" ] && [ "${{ needs.build-docker.result }}" == "success" ]; then
+            echo "status=성공" >> $GITHUB_OUTPUT
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+            echo "color=good" >> $GITHUB_OUTPUT
+          else
+            echo "status=실패" >> $GITHUB_OUTPUT
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+            echo "color=danger" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Slack 알림 전송
+        if: env.SLACK_WEBHOOK_URL != ''
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -X POST $SLACK_WEBHOOK_URL \
+          -H 'Content-Type: application/json' \
+          -d '{
+            "text": "CI 파이프라인 ${{ steps.ci-result.outputs.status }}",
+            "blocks": [
+              {
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": "${{ steps.ci-result.outputs.emoji }} CI 파이프라인 ${{ steps.ci-result.outputs.status }}",
+                  "emoji": true
+                }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "*저장소:*\n${{ github.repository }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*브랜치:*\n`${{ github.ref_name }}`"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*커밋:*\n${{ github.sha }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*작성자:*\n${{ github.actor }}"
+                  }
+                ]
+              },
+              {
+                "type": "section",
+                "fields": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "*테스트:*\n${{ needs.test.result == 'success' && '✅ 성공' || '❌ 실패' }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Docker 빌드:*\n${{ needs.build-docker.result == 'success' && '✅ 성공' || '❌ 실패' }}"
+                  }
+                ]
+              },
+              {
+                "type": "actions",
+                "elements": [
+                  {
+                    "type": "button",
+                    "text": {
+                      "type": "plain_text",
+                      "text": "워크플로우 보기"
+                    },
+                    "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                ]
+              }
+            ]
+          }'
