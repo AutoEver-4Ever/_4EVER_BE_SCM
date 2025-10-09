@@ -1,14 +1,20 @@
 # Gradle
-.gradle/
 build/
-!gradle-wrapper.jar
+.gradle
 .gradletasknamecache
+!gradle/wrapper/gradle-wrapper.jar
 
 # IDE
 .idea/
 .vscode/
+*.iml
+*.ipr
+*.iws
 *.swp
 *.swo
+.classpath
+.project
+.settings
 
 # OS
 .DS_Store
@@ -16,9 +22,7 @@ Thumbs.db
 
 # Logs
 *.log
-
-# Test
-src/test/
+logs/
 
 # Documentation
 *.md
@@ -27,3 +31,21 @@ src/test/
 # Git
 .git/
 .gitignore
+.gitattributes
+
+# CI/CD
+.github/
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+
+# Environment
+.env
+.env.*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
