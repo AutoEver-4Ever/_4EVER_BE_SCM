@@ -9,7 +9,7 @@ on:
       - main
 
 jobs:
-  deploy:
+  build-and-push:
     name: Docker 이미지 빌드 및 푸시
     runs-on: ubuntu-latest
     # CI가 성공한 경우에만 실행
@@ -70,6 +70,47 @@ jobs:
           echo "태그 1: latest"
           echo "태그 2: ${{ steps.commit.outputs.short_sha }}"
           echo "커밋: ${{ github.sha }}"
+          echo "========================================="
+
+  deploy:
+    name: 프로덕션 서버 배포
+    runs-on: self-hosted
+    needs: build-and-push
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: S3에서 application.yml 다운로드
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          cd ~/autoever
+          mkdir -p _4EVER_BE_SCM/src/main/resources
+
+          # 기존 application.yml 삭제 (최신화 보장)
+          rm -f _4EVER_BE_SCM/src/main/resources/application.yml
+
+          # S3에서 최신 application.yml 다운로드
+          aws s3 cp s3://kimprun-s3/everp/scm/application.yml \
+            _4EVER_BE_SCM/src/main/resources/application.yml
+
+          if [ $? -eq 0 ]; then
+            echo "✅ application.yml 다운로드 성공"
+          else
+            echo "❌ application.yml 다운로드 실패"
+            exit 1
+          fi
+
+      - name: Makefile로 SCM 서비스 배포
+        run: |
+          cd ~/autoever
+          make prod-deploy-scm
+
+      - name: 배포 완료
+        run: |
+          echo "========================================="
+          echo "✅ SCM 서비스 배포 완료"
           echo "========================================="
 
   notify:
