@@ -88,8 +88,12 @@ jobs:
           cd ~/autoever
           mkdir -p _4EVER_BE_SCM/src/main/resources
 
-          # 기존 application.yml 삭제 (최신화 보장)
-          rm -f _4EVER_BE_SCM/src/main/resources/application.yml
+          # 기존 application.yml 삭제 (디렉토리인 경우도 처리)
+          if [ -d "_4EVER_BE_SCM/src/main/resources/application.yml" ]; then
+            rm -rf _4EVER_BE_SCM/src/main/resources/application.yml
+          elif [ -f "_4EVER_BE_SCM/src/main/resources/application.yml" ]; then
+            rm -f _4EVER_BE_SCM/src/main/resources/application.yml
+          fi
 
           # S3에서 최신 application.yml 다운로드
           aws s3 cp s3://kimprun-s3/everp/scm/application.yml \
