@@ -1,0 +1,99 @@
+name: Slack 알림 - Pull Request
+
+on:
+  pull_request:
+    types: [opened, closed, reopened, ready_for_review]
+
+jobs:
+  notify-slack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: PR 상태 설정
+        id: pr-status
+        run: |
+          if [ "${{ github.event.pull_request.merged }}" == "true" ]; then
+            echo "status=병합됨" >> $GITHUB_OUTPUT
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.action }}" == "closed" ]; then
+            echo "status=종료됨" >> $GITHUB_OUTPUT
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.action }}" == "reopened" ]; then
+            echo "status=재오픈됨" >> $GITHUB_OUTPUT
+            echo "emoji=🔔" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.action }}" == "ready_for_review" ]; then
+            echo "status=리뷰 준비 완료" >> $GITHUB_OUTPUT
+            echo "emoji=👀" >> $GITHUB_OUTPUT
+          else
+            echo "status=생성됨" >> $GITHUB_OUTPUT
+            echo "emoji=🔔" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Slack 알림 전송
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_PR_URL }}
+        run: |
+          curl -X POST $SLACK_WEBHOOK_URL \
+          -H 'Content-Type: application/json' \
+          -d '{
+            "text": "GitHub Pull Request ${{ steps.pr-status.outputs.status }}",
+            "blocks": [
+              {
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": "${{ steps.pr-status.outputs.emoji }} Pull Request ${{ steps.pr-status.outputs.status }}: #${{ github.event.pull_request.number }}",
+                  "emoji": true
+                }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "*저장소:*\n${{ github.repository }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*작성자:*\n${{ github.event.pull_request.user.login }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*브랜치:*\n`${{ github.event.pull_request.head.ref }}` → `${{ github.event.pull_request.base.ref }}`"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*상태:*\n${{ steps.pr-status.outputs.status }}"
+                  }
+                ]
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*제목:*\n${{ github.event.pull_request.title }}"
+                }
+              },
+              {
+                "type": "context",
+                "elements": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "커밋: ${{ github.event.pull_request.commits }}개 | 파일 변경: ${{ github.event.pull_request.changed_files }}개 | +${{ github.event.pull_request.additions }} -${{ github.event.pull_request.deletions }}"
+                  }
+                ]
+              },
+              {
+                "type": "actions",
+                "elements": [
+                  {
+                    "type": "button",
+                    "text": {
+                      "type": "plain_text",
+                      "text": "PR 보기"
+                    },
+                    "url": "${{ github.event.pull_request.html_url }}"
+                  }
+                ]
+              }
+            ]
+          }'
