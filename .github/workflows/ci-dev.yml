@@ -12,6 +12,9 @@ jobs:
   test:
     name: 단위 테스트
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
 
     steps:
       - name: 코드 체크아웃
