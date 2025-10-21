@@ -12,6 +12,10 @@ jobs:
   test:
     name: 단위 테스트
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
 
     steps:
       - name: 코드 체크아웃
@@ -51,7 +55,10 @@ jobs:
           fi
 
       - name: 테스트 리포트 생성
-        if: always() && steps.test-results.outputs.exists == 'true'
+        # 포크에서 올라온 PR은 GITHUB_TOKEN 권한이 제한되어 체크런/코멘트 작성 불가
+        if: >-
+          always() && steps.test-results.outputs.exists == 'true' &&
+          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: dorny/test-reporter@v1
         with:
           name: 테스트 결과
@@ -85,7 +92,7 @@ jobs:
           context: .
           file: ./Dockerfile-dev
           push: false
-          tags: scm-service:dev-${{ github.sha }}
+          tags: payment-service:dev-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -95,7 +102,7 @@ jobs:
           context: .
           file: ./Dockerfile
           push: false
-          tags: scm-service:prod-${{ github.sha }}
+          tags: payment-service:prod-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
