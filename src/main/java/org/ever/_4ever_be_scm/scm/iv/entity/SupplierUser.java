@@ -24,6 +24,12 @@ public class SupplierUser {
     @Column(name = "supplier_user_name")
     private String supplierUserName;
 
+    @Column(name = "supplier_user_email")
+    private String supplierUserEmail;
+
+    @Column(name = "supplier_user_phone_number")
+    private String supplierUserPhoneNumber;
+
     @Column(name="customer_user_code")
     private String customerUserCode;
 
