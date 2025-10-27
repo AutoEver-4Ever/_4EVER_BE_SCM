@@ -27,6 +27,7 @@ public enum ErrorCode {
     INVALID_QUANTITY(2006, HttpStatus.BAD_REQUEST, "유효하지 않은 수량입니다."),
     SHIPMENT_FAILED(2007, HttpStatus.BAD_REQUEST, "출고 처리에 실패했습니다."),
     INVALID_WAREHOUSE(2008, HttpStatus.BAD_REQUEST, "유효하지 않은 창고입니다."),
+    INVALID_STATUS(2009,HttpStatus.BAD_REQUEST,"상태코드가 잘못되었습니다"),
 
     // User Errors (3000~3999)
     USER_NOT_FOUND(3000, HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
