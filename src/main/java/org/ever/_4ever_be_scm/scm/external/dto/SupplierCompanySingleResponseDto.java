@@ -13,7 +13,8 @@ public class SupplierCompanySingleResponseDto {
     private String companyId;
     private String companyNumber;
     private String companyName;
-    private String address;
+    private String baseAddress;
+    private String detailAddress;
     private String category;
     private String officePhone;
     private String managerId;

@@ -1,9 +1,12 @@
 package org.ever._4ever_be_scm.common.service;
 
+import org.springframework.stereotype.Component;
+
 import java.time.*;
 import java.time.temporal.*;
 import java.util.*;
 
+@Component
 public class DateRangeCalculator {
 
     public enum PeriodType {
@@ -14,17 +17,18 @@ public class DateRangeCalculator {
      * 기준 날짜와 기간 타입(WEEK, MONTH, QUARTER, YEAR)에 따라
      * 저번 기간과 이번 기간을 함께 반환
      */
-    public static Map<String, LocalDate[]> getDateRanges(PeriodType type) {
+    public static Map<String, LocalDate[]> getDateRanges() {
+        LocalDate baseDate = LocalDate.now();
 
-        LocalDate baseDate =  LocalDate.now();
+        Map<String, LocalDate[]> allRanges = new HashMap<>();
+        allRanges.putAll(getWeekRanges(baseDate));
+        allRanges.putAll(getMonthRanges(baseDate));
+        allRanges.putAll(getQuarterRanges(baseDate));
+        allRanges.putAll(getYearRanges(baseDate));
 
-        return switch (type) {
-            case WEEK -> getWeekRanges(baseDate);
-            case MONTH -> getMonthRanges(baseDate);
-            case QUARTER -> getQuarterRanges(baseDate);
-            case YEAR -> getYearRanges(baseDate);
-        };
+        return allRanges;
     }
+
 
     /**
      * WEEK: 저번주시작요일(월) ~ 저번주 같은 요일 /

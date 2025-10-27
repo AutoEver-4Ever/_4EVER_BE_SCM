@@ -9,4 +9,14 @@ public interface PurchaseOrderService {
     Page<PurchaseOrderListResponseDto> getPurchaseOrderList(PurchaseOrderSearchVo searchVo);
     
     PurchaseOrderDetailResponseDto getPurchaseOrderDetail(String purchaseOrderId);
+    
+    /**
+     * 발주서 승인
+     */
+    void approvePurchaseOrder(String purchaseOrderId);
+    
+    /**
+     * 발주서 반려
+     */
+    void rejectPurchaseOrder(String purchaseOrderId, String reason);
 }

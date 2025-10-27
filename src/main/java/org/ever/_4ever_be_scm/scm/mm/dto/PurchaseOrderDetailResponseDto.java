@@ -25,7 +25,6 @@ public class PurchaseOrderDetailResponseDto {
     private String supplierName;
     private String managerPhone;
     private String managerEmail;
-    private String deliveryAddress;
     private List<ItemDto> items;
     private BigDecimal totalAmount;
     private String note;

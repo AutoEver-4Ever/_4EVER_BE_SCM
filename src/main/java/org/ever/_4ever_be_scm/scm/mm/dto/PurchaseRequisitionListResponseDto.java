@@ -22,6 +22,5 @@ public class PurchaseRequisitionListResponseDto {
     private String departmentName;
     private String statusCode;
     private LocalDateTime requestDate;
-    private String createdBy;
     private BigDecimal totalAmount;
 }

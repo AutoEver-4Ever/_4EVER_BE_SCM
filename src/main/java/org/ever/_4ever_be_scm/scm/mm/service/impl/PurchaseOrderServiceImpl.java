@@ -2,6 +2,8 @@ package org.ever._4ever_be_scm.scm.mm.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.ever._4ever_be_scm.scm.iv.entity.Product;
+import org.ever._4ever_be_scm.scm.iv.entity.SupplierCompany;
+import org.ever._4ever_be_scm.scm.iv.entity.SupplierUser;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductRepository;
 import org.ever._4ever_be_scm.scm.mm.dto.PurchaseOrderDetailResponseDto;
 import org.ever._4ever_be_scm.scm.mm.dto.PurchaseOrderListResponseDto;
@@ -23,6 +25,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -32,6 +35,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private final ProductOrderRepository productOrderRepository;
     private final ProductOrderItemRepository productOrderItemRepository;
     private final ProductRepository productRepository;
+    private final ProductOrderApprovalRepository productOrderApprovalRepository;
 
     @Override
     @Transactional(readOnly = true)  
@@ -147,6 +151,16 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                     .totalPrice(item.getPrice().multiply(item.getCount()))
                     .build());
         }
+
+        // supplierName: first item's product -> supplierCompany
+        SupplierCompany supplierCompany = null;
+        if (!items.isEmpty()) {
+            ProductOrderItem first = items.get(0);
+            Product product = productRepository.findById(first.getProductId()).orElse(null);
+            if (product != null && product.getSupplierCompany() != null) {
+                supplierCompany = product.getSupplierCompany();
+            }
+        }
         
         return PurchaseOrderDetailResponseDto.builder()
                 .statusCode(statusCode)
@@ -154,13 +168,24 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .purchaseOrderId(productOrder.getId())
                 .purchaseOrderNumber(productOrder.getProductOrderCode())
                 .orderDate(productOrder.getCreatedAt())
-                // supplier 정보: 첫 아이템의 제품에서 supplierCompany와 supplierUser 사용
-                .supplierId(null)
-                .supplierNumber(null)
-                .supplierName(null)
-                .managerPhone(null)
-                .managerEmail(null)
-                .deliveryAddress(null)
+                .supplierId(Optional.ofNullable(supplierCompany)
+                        .map(SupplierCompany::getId)
+                        .orElse(null))
+                .supplierName(Optional.ofNullable(supplierCompany)
+                        .map(SupplierCompany::getCompanyName)
+                        .orElse(null))
+                .supplierNumber(Optional.ofNullable(supplierCompany)
+                        .map(SupplierCompany::getCompanyCode)
+                        .orElse(null))
+                .managerPhone(Optional.ofNullable(supplierCompany)
+                        .map(SupplierCompany::getSupplierUser)
+                        .map(SupplierUser::getSupplierUserPhoneNumber)
+                        .orElse(null))
+                .managerEmail(Optional.ofNullable(supplierCompany)
+                        .map(SupplierCompany::getSupplierUser)
+                        .map(SupplierUser::getSupplierUserEmail)
+                        .orElse(null))
+
                 .items(itemDtos)
                 .totalAmount(productOrder.getTotalPrice())
                 .note(productOrder.getEtc())
@@ -171,14 +196,58 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         if (items.isEmpty()) {
             return "아이템 없음";
         }
-        
-        return items.stream()
-                .limit(3) // 최대 3개 아이템만 표시
+
+        int displayLimit = 3; // 최대 표시할 아이템 수
+        List<String> names = items.stream()
                 .map(item -> {
                     Product product = productRepository.findById(item.getProductId()).orElse(null);
                     String productName = product != null ? product.getProductName() : "알 수 없는 제품";
                     return productName + " " + item.getCount() + item.getUnit();
                 })
-                .collect(Collectors.joining(", "));
+                .toList();
+
+        String result;
+        if (names.size() > displayLimit) {
+            result = String.join(", ", names.subList(0, displayLimit)) + ", ...";
+        } else {
+            result = String.join(", ", names);
+        }
+
+        return result;
+    }
+
+    @Override
+    @Transactional
+    public void approvePurchaseOrder(String purchaseOrderId) {
+        ProductOrder productOrder = productOrderRepository.findById(purchaseOrderId)
+                .orElseThrow(() -> new RuntimeException("발주서를 찾을 수 없습니다: " + purchaseOrderId));
+        
+        ProductOrderApproval approval = productOrder.getApprovalId();
+        if (approval == null) {
+            throw new RuntimeException("승인 정보가 없습니다.");
+        }
+        
+        approval.setApprovalStatus("APPROVAL");
+        approval.setApprovedBy("1");
+        approval.setApprovedAt(LocalDateTime.now());
+        productOrderApprovalRepository.save(approval);
+    }
+
+    @Override
+    @Transactional
+    public void rejectPurchaseOrder(String purchaseOrderId, String reason) {
+        ProductOrder productOrder = productOrderRepository.findById(purchaseOrderId)
+                .orElseThrow(() -> new RuntimeException("발주서를 찾을 수 없습니다: " + purchaseOrderId));
+        
+        ProductOrderApproval approval = productOrder.getApprovalId();
+        if (approval == null) {
+            throw new RuntimeException("승인 정보가 없습니다.");
+        }
+        
+        approval.setApprovalStatus("REJECTED");
+        approval.setApprovedBy("1");
+        approval.setRejectedReason(reason);
+        approval.setApprovedAt(LocalDateTime.now());
+        productOrderApprovalRepository.save(approval);
     }
 }
