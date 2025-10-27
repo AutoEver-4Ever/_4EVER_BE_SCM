@@ -14,7 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "생산 관리", description = "생산 관리 API")
+@Tag(name = "생산관리", description = "생산 관리 API")
 @RestController
 @RequestMapping("/api/scm-pp/pp/boms")
 @RequiredArgsConstructor

@@ -83,10 +83,10 @@ public class PurchaseRequisitionController {
         
         purchaseRequisitionService.createPurchaseRequisition(createVo);
         
-        return ResponseEntity.ok(ApiResponse.success(null, "구매요청서가 생성되었습니다.", HttpStatus.OK));
+        return ResponseEntity.ok(ApiResponse.success(null, "비재고성 구매요청서가 생성되었습니다.", HttpStatus.OK));
     }
 
-    @PatchMapping("/{purchaseRequisitionId}/release")
+    @PatchMapping("/{purchaseRequisitionId}/approve")
     public ResponseEntity<ApiResponse<Void>> approvePurchaseRequisition(
             @PathVariable String purchaseRequisitionId) {
         
