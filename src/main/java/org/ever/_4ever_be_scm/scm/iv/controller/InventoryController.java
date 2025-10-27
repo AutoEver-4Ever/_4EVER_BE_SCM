@@ -1,5 +1,6 @@
 package org.ever._4ever_be_scm.scm.iv.controller;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.ever._4ever_be_scm.common.response.ApiResponse;
 import org.ever._4ever_be_scm.scm.iv.dto.InventoryItemDetailDto;
@@ -15,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+@Tag(name = "재고관리", description = "재고 관리 API")
 @RestController
 @RequestMapping("/api/scm-pp/iv")
 @RequiredArgsConstructor

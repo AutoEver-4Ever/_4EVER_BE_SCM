@@ -1,10 +1,11 @@
 package org.ever._4ever_be_scm.scm.iv.controller;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.ever._4ever_be_scm.common.response.ApiResponse;
 import org.ever._4ever_be_scm.scm.iv.dto.PagedResponseDto;
 import org.ever._4ever_be_scm.scm.iv.dto.PurchaseOrderDto;
-import org.ever._4ever_be_scm.scm.iv.service.PurchaseOrderService;
+import org.ever._4ever_be_scm.scm.iv.service.PurchaseOrdersService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -14,12 +15,13 @@ import org.springframework.web.bind.annotation.*;
 /**
  * 구매 발주 관리 컨트롤러
  */
+@Tag(name = "재고관리", description = "재고 관리 API")
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/scm-pp/iv")
 @RequiredArgsConstructor
-public class PurchaseOrderController {
+public class PurchaseOrdersController {
     
-    private final PurchaseOrderService purchaseOrderService;
+    private final PurchaseOrdersService purchaseOrderService;
     
     /**
      * 입고 대기/완료 목록 조회 API
