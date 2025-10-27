@@ -5,6 +5,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
 /**
  * 구매 발주 DTO
  */
@@ -31,17 +34,17 @@ public class PurchaseOrderDto {
     /**
      * 주문 일자
      */
-    private String orderDate;
+    private LocalDateTime orderDate;
 
     /**
      * 납기 일자
      */
-    private String dueDate;
+    private LocalDateTime dueDate;
 
     /**
      * 총 금액
      */
-    private long totalAmount;
+    private BigDecimal totalAmount;
 
     /**
      * 상태 (입고 대기, 입고 완료)

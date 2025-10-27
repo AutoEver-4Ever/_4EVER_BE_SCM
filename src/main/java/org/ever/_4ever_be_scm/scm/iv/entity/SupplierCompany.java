@@ -31,6 +31,9 @@ public class SupplierCompany extends TimeStamp {
     @Column(name = "company_name", nullable = false)
     private String companyName;
 
+    @Column(name="status")
+    private String status;
+
     @Column(name = "address")
     private String address;
 

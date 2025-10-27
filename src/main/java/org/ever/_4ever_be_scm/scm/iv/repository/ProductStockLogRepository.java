@@ -11,7 +11,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface ProductStockLogRepository extends JpaRepository<ProductStockLog, Long> {
+public interface ProductStockLogRepository extends JpaRepository<ProductStockLog, String> {
     
     @Query("SELECT psl FROM ProductStockLog psl " +
            "JOIN FETCH psl.productStock ps " +

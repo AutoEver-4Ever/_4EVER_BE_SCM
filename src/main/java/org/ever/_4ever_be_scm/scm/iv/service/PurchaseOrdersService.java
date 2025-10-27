@@ -7,7 +7,7 @@ import org.springframework.data.domain.Pageable;
 /**
  * 구매 발주 관리 서비스 인터페이스
  */
-public interface PurchaseOrderService {
+public interface PurchaseOrdersService {
     
     /**
      * 입고 상태별 발주 목록 조회

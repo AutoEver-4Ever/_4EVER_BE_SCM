@@ -14,6 +14,12 @@ import java.math.BigDecimal;
 @Getter
 @Table(name = "product")
 public class Product extends TimeStamp {
+    public void setProductName(String productName) {
+        this.productName = productName;
+    }
+    public void setUnit(String unit) {
+        this.unit = unit;
+    }
 
     /**
      * 제품 고유 식별자 (UUID)
@@ -46,6 +52,11 @@ public class Product extends TimeStamp {
 
     @Column(name = "selling_price")
     private BigDecimal sellingPrice;
+
+    public void updatePrice(BigDecimal originPrice, BigDecimal marginRate) {
+        this.originPrice = originPrice;
+        this.sellingPrice = originPrice.multiply(marginRate);
+    }
 
     @PrePersist
     public void prePersist() {

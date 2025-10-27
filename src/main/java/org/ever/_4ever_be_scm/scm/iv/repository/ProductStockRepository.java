@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
 public interface ProductStockRepository extends JpaRepository<ProductStock, String> {
     @Query("SELECT ps FROM ProductStock ps " +
@@ -39,4 +41,7 @@ public interface ProductStockRepository extends JpaRepository<ProductStock, Stri
 
     @Query("SELECT COUNT(ps) FROM ProductStock ps WHERE ps.totalCount < ps.safetyCount AND ps.status = :status")
     long countShortageItemsByStatus(@Param("status") String status);
+    
+    @Query("SELECT ps FROM ProductStock ps WHERE ps.product.id = :productId")
+    List<ProductStock> findByProductId(@Param("productId") String productId);
 }
