@@ -55,6 +55,7 @@ jobs:
           fi
 
       - name: 테스트 리포트 생성
+        continue-on-error: true
         # 포크에서 올라온 PR은 GITHUB_TOKEN 권한이 제한되어 체크런/코멘트 작성 불가
         if: >-
           always() && steps.test-results.outputs.exists == 'true' &&
