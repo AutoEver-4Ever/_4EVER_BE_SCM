@@ -43,9 +43,6 @@ public class Warehouse extends TimeStamp {
     @Column(name = "location")
     private String location;
 
-    @Column(name = "address")
-    private String address;
-
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 

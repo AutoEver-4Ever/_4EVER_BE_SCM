@@ -27,7 +27,6 @@ import java.util.UUID;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@Profile({"dev", "local"})
 public class MockDataInitializer {
 
     // IV 도메인 Repository
@@ -131,7 +130,7 @@ public class MockDataInitializer {
                     .warehouseType(i % 2 == 1 ? "ITEM" : "MATERIAL")
                     .status("ACTIVE")
                     .internalUserId("internalUser-" + i)
-                    .address("경기도 천안시"+i)
+                    .location("경기도 천안시"+i)
                     .build();
             warehouses.add(warehouse);
         }
