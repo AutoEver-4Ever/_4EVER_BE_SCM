@@ -30,18 +30,14 @@ public interface ProductStockRepository extends JpaRepository<ProductStock, Stri
     @Query("SELECT ps FROM ProductStock ps " +
            "JOIN FETCH ps.product p " +
            "JOIN FETCH ps.warehouse w " +
-           "WHERE ps.totalCount < ps.safetyCount " +
-           "AND (:status IS NULL OR ps.status = :status)")
+           "WHERE (:status IS NULL OR ps.status = :status)")
     Page<ProductStock> findShortageItems(@Param("status") String status, Pageable pageable);
 
     @Query("SELECT ps FROM ProductStock ps " +
            "JOIN FETCH ps.product p " +
            "JOIN FETCH ps.warehouse w " +
-           "WHERE ps.totalCount < ps.safetyCount")
+           "WHERE ps.availableCount < ps.safetyCount")
     Page<ProductStock> findAllShortageItems(Pageable pageable);
-
-    @Query("SELECT COUNT(ps) FROM ProductStock ps WHERE ps.totalCount < ps.safetyCount AND ps.status = :status")
-    long countShortageItemsByStatus(@Param("status") String status);
     
     @Query("SELECT ps FROM ProductStock ps WHERE ps.product.id = :productId")
     List<ProductStock> findByListProductId(@Param("productId") String productId);
