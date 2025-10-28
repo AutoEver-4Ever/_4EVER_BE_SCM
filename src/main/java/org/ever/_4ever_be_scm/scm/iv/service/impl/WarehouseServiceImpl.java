@@ -1,8 +1,7 @@
 package org.ever._4ever_be_scm.scm.iv.service.impl;
 
 import lombok.RequiredArgsConstructor;
-import org.ever._4ever_be_scm.scm.iv.dto.WarehouseDetailDto;
-import org.ever._4ever_be_scm.scm.iv.dto.WarehouseDto;
+import org.ever._4ever_be_scm.scm.iv.dto.*;
 import org.ever._4ever_be_scm.scm.iv.entity.Warehouse;
 import org.ever._4ever_be_scm.scm.iv.repository.WarehouseRepository;
 import org.ever._4ever_be_scm.scm.iv.service.WarehouseService;
@@ -10,8 +9,12 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
+import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * 창고 관리 서비스 구현체
@@ -119,6 +122,88 @@ public class WarehouseServiceImpl implements WarehouseService {
                 .location(warehouse.getLocation())
                 .manager(managerName)
                 .managerPhone(phoneNumber)
+                .build();
+    }
+    
+    /**
+     * 창고 생성
+     * 
+     * @param request 창고 생성 요청 정보
+     */
+    @Override
+    @Transactional
+    public void createWarehouse(WarehouseCreateRequestDto request) {
+        // 창고 코드 자동 생성 (WH + 타임스탬프)
+        String uuid = UUID.randomUUID().toString().replace("-", "");
+        String warehouseCode = "WH-" + uuid.substring(uuid.length() - 6);
+        
+        Warehouse warehouse = Warehouse.builder()
+                .warehouseCode(warehouseCode)
+                .warehouseName(request.getWarehouseName())
+                .warehouseType(request.getWarehouseType())
+                .status("ACTIVE") // 기본값으로 ACTIVE 설정
+                .internalUserId(request.getManagerId())
+                .location(request.getLocation())
+                .description(request.getNote())
+                .build();
+        
+        warehouseRepository.save(warehouse);
+    }
+    
+    /**
+     * 창고 정보 수정
+     * 
+     * @param warehouseId 창고 ID
+     * @param request 창고 수정 요청 정보
+     */
+    @Override
+    @Transactional
+    public void updateWarehouse(String warehouseId, WarehouseUpdateRequestDto request) {
+        Warehouse warehouse = warehouseRepository.findById(warehouseId)
+                .orElseThrow(() -> new NoSuchElementException("창고를 찾을 수 없습니다."));
+        
+        // 부분 업데이트 - null이 아닌 값만 업데이트
+        Warehouse updatedWarehouse = Warehouse.builder()
+                .id(warehouse.getId())
+                .warehouseCode(warehouse.getWarehouseCode())
+                .warehouseName(StringUtils.hasText(request.getWarehouseName()) ? 
+                        request.getWarehouseName() : warehouse.getWarehouseName())
+                .warehouseType(StringUtils.hasText(request.getWarehouseType()) ? 
+                        request.getWarehouseType() : warehouse.getWarehouseType())
+                .status(StringUtils.hasText(request.getWarehouseStatusCode()) ? 
+                        request.getWarehouseStatusCode() : warehouse.getStatus())
+                .internalUserId(StringUtils.hasText(request.getManagerId()) ? 
+                        request.getManagerId() : warehouse.getInternalUserId())
+                .location(StringUtils.hasText(request.getLocation()) ? 
+                        request.getLocation() : warehouse.getLocation())
+                .description(StringUtils.hasText(request.getNote()) ? 
+                        request.getNote() : warehouse.getDescription())
+                .build();
+        
+        warehouseRepository.save(updatedWarehouse);
+    }
+    
+    /**
+     * 창고 드롭다운 목록 조회
+     * 
+     * @param excludeWarehouseId 제외할 창고 ID (선택사항)
+     * @return 창고 드롭다운 목록
+     */
+    @Override
+    public WarehouseDropdownResponseDto getWarehouseDropdown(String excludeWarehouseId) {
+        List<Warehouse> warehouses = warehouseRepository.findAllByStatus("ACTIVE");
+        
+        List<WarehouseDropdownResponseDto.WarehouseDropdownItem> items = warehouses.stream()
+                .filter(warehouse -> excludeWarehouseId == null || !warehouse.getId().equals(excludeWarehouseId))
+                .map(warehouse -> WarehouseDropdownResponseDto.WarehouseDropdownItem.builder()
+                        .warehouseNumber(warehouse.getWarehouseCode())
+                        .warehouseId(warehouse.getId())
+                        .warehouseName(warehouse.getWarehouseName())
+                        .build())
+                .collect(Collectors.toList());
+        
+        return WarehouseDropdownResponseDto.builder()
+                .warehouses(items)
                 .build();
     }
 }
