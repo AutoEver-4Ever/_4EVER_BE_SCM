@@ -23,4 +23,16 @@ public interface ProductOrderRepository extends JpaRepository<ProductOrder, Stri
     @Query("SELECT SUM(p.totalPrice) FROM ProductOrder p WHERE p.createdAt BETWEEN :startDate AND :endDate")
     Optional<BigDecimal> sumTotalPriceByOrderDateBetween(@Param("startDate") LocalDateTime startDate,
                                                          @Param("endDate") LocalDateTime endDate);
+    
+    /**
+     * 상태별, dueDate 기준 날짜 범위로 ProductOrder 조회
+     * 
+     * @param approvalStatus 승인 상태
+     * @param startDate 시작일
+     * @param endDate 종료일
+     * @param pageable 페이징 정보
+     * @return ProductOrder 페이지
+     */
+    Page<ProductOrder> findByApprovalId_ApprovalStatusAndDueDateBetween(
+            String approvalStatus, LocalDate startDate, LocalDate endDate, Pageable pageable);
 }
