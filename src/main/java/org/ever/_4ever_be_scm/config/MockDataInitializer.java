@@ -159,7 +159,6 @@ public class MockDataInitializer {
             ProductStock stock = ProductStock.builder()
                     .product(products.get(i))
                     .warehouse(warehouses.get(i))
-                    .totalCount(BigDecimal.valueOf(100 + i * 20))
                     .availableCount(BigDecimal.valueOf(80 + i * 15))
                     .safetyCount(BigDecimal.valueOf(50))
                     .status("NORMAL")

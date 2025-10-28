@@ -52,6 +52,9 @@ public class ProductStockLog extends TimeStamp {
     @Column(name = "reference_code")
     private String referenceCode;
 
+    @Column(name = "note")
+    private String note;
+
     @PrePersist
     public void prePersist() {
         if (id == null) {

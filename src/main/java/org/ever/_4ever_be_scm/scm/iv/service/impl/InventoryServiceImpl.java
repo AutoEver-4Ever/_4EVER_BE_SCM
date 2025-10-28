@@ -106,10 +106,10 @@ public class InventoryServiceImpl implements InventoryService {
                 .itemNumber(product.getProductCode())
                 .category(product.getCategory())
                 // 재고 정보
-                .currentStock(productStock.getTotalCount().intValue())
+                .currentStock(productStock.getAvailableCount().intValue())
                 .uomName(product.getUnit())
                 .unitPrice(product.getOriginPrice())
-                .totalAmount(productStock.getTotalCount().multiply(product.getOriginPrice()))
+                .totalAmount(productStock.getAvailableCount().multiply(product.getOriginPrice()))
                 .safetyStock(productStock.getSafetyCount().intValue())
                 .statusCode(productStock.getStatus())
                 // 위치 정보
@@ -165,14 +165,14 @@ public class InventoryServiceImpl implements InventoryService {
         Product product = productStock.getProduct();
         Warehouse warehouse = productStock.getWarehouse();
 
-        BigDecimal totalPrice = productStock.getTotalCount().multiply(product.getOriginPrice());
+        BigDecimal totalPrice = productStock.getAvailableCount().multiply(product.getOriginPrice());
 
         return InventoryItemDto.builder()
                 .itemId(product.getId())
                 .itemNumber(product.getProductCode())
                 .itemName(product.getProductName())
                 .category(product.getCategory())
-                .currentStock(productStock.getTotalCount().intValue())
+                .currentStock(productStock.getAvailableCount().intValue())
                 .safetyStock(productStock.getSafetyCount().intValue())
                 .uomName(product.getUnit())
                 .unitPrice(product.getOriginPrice())
@@ -221,9 +221,9 @@ public class InventoryServiceImpl implements InventoryService {
         Product product = productStock.getProduct();
         Warehouse warehouse = productStock.getWarehouse();
         
-        int currentStock = productStock.getTotalCount().intValue();
+        int currentStock = productStock.getAvailableCount().intValue();
         int safetyStock = productStock.getSafetyCount().intValue();
-        BigDecimal totalPrice = productStock.getTotalCount().multiply(product.getOriginPrice());
+        BigDecimal totalPrice = productStock.getAvailableCount().multiply(product.getOriginPrice());
         
         return ShortageItemDto.builder()
                 .itemId(product.getId())
@@ -247,7 +247,7 @@ public class InventoryServiceImpl implements InventoryService {
     private ShortageItemPreviewDto mapToShortageItemPreviewDto(ProductStock productStock) {
         Product product = productStock.getProduct();
         
-        int currentStock = productStock.getTotalCount().intValue();
+        int currentStock = productStock.getAvailableCount().intValue();
         int safetyStock = productStock.getSafetyCount().intValue();
         
         return ShortageItemPreviewDto.builder()
@@ -283,7 +283,6 @@ public class InventoryServiceImpl implements InventoryService {
         ProductStock productStock = ProductStock.builder()
                 .product(product)
                 .warehouse(warehouse)
-                .totalCount(BigDecimal.valueOf(request.getCurrentStock()))
                 .availableCount(BigDecimal.valueOf(request.getCurrentStock()))
                 .safetyCount(BigDecimal.valueOf(request.getSafetyStock()))
                 .status(calculateStatus(request.getCurrentStock(), request.getSafetyStock()))
@@ -308,7 +307,7 @@ public class InventoryServiceImpl implements InventoryService {
         for (ProductStock productStock : productStocks) {
             productStock.setSafetyCount(BigDecimal.valueOf(safetyStock));
             // 상태 재계산
-            productStock.setStatus(calculateStatus(productStock.getTotalCount().intValue(), safetyStock));
+            productStock.setStatus(calculateStatus(productStock.getAvailableCount().intValue(), safetyStock));
             productStockRepository.save(productStock);
         }
     }
@@ -316,7 +315,7 @@ public class InventoryServiceImpl implements InventoryService {
     /**
      * 재고 상태 계산
      */
-    private String calculateStatus(Integer currentStock, Integer safetyStock) {
+    private  String calculateStatus(Integer currentStock, Integer safetyStock) {
         if (currentStock == null || safetyStock == null || safetyStock == 0) {
             return "NORMAL";
         }
