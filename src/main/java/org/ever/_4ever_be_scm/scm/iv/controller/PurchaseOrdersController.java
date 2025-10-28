@@ -33,6 +33,9 @@ public class PurchaseOrdersController {
      * @return 입고 준비 목록
      */
     @GetMapping("/purchase-orders/receiving")
+    @io.swagger.v3.oas.annotations.Operation(
+            summary = "입고 준비 목록 조회"
+    )
     public ResponseEntity<ApiResponse<PagedResponseDto<PurchaseOrderDto>>> getReceivingPurchaseOrders(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
@@ -54,6 +57,9 @@ public class PurchaseOrdersController {
      * @return 입고 완료 목록
      */
     @GetMapping("/purchase-orders/received")
+    @io.swagger.v3.oas.annotations.Operation(
+            summary = "입고 완료 목록 조회"
+    )
     public ResponseEntity<ApiResponse<PagedResponseDto<PurchaseOrderDto>>> getReceivedPurchaseOrders(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,

@@ -12,15 +12,6 @@ import java.time.LocalDate;
 public interface PurchaseOrdersService {
     
     /**
-     * 입고 상태별 발주 목록 조회
-     * 
-     * @param status 상태 (입고 대기, 입고 완료)
-     * @param pageable 페이징 정보
-     * @return 입고 상태별 발주 목록
-     */
-    Page<PurchaseOrderDto> getPurchaseOrdersByStatus(String status, Pageable pageable);
-    
-    /**
      * 입고 준비 목록 조회 (RECEIVING 상태)
      * 
      * @param pageable 페이징 정보
