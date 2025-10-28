@@ -106,4 +106,18 @@ public class ExternalApiController {
                     .body(ApiResponse.fail("조회 실패: " + e.getMessage(), HttpStatus.BAD_REQUEST));
         }
     }
+
+    /**
+     * 7. 카테고리가 ITEM인 Product 목록 반환
+     */
+    @GetMapping("/product/item-category")
+    public ResponseEntity<ApiResponse<ProductMultipleResponseDto>> getItemCategoryProducts() {
+        try {
+            ProductMultipleResponseDto response = externalApiService.getItemCategoryProducts();
+            return ResponseEntity.ok(ApiResponse.success(response, "성공 메시지", HttpStatus.OK));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.fail("조회 실패: " + e.getMessage(), HttpStatus.BAD_REQUEST));
+        }
+    }
 }

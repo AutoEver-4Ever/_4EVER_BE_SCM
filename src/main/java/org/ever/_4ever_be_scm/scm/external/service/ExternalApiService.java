@@ -35,4 +35,9 @@ public interface ExternalApiService {
      * SupplierCompanyId들로 SupplierCompany 정보 가져오기(다수)
      */
     SupplierCompanyMultipleResponseDto getSupplierCompaniesMultiple(List<String> supplierCompanyIds);
+
+    /**
+     * 카테고리가 ITEM인 Product 목록 반환 (productId, productName, uomName, unitPrice)
+     */
+    ProductMultipleResponseDto getItemCategoryProducts();
 }
