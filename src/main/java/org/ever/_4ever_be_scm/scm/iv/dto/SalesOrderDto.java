@@ -21,12 +21,12 @@ public class SalesOrderDto {
     /**
      * 판매 주문 코드
      */
-    private String salesOrderCode;
+    private String salesOrderNumber;
 
     /**
      * 고객사
      */
-    private String customer;
+    private String customerName;
 
     /**
      * 주문 일자
@@ -46,5 +46,5 @@ public class SalesOrderDto {
     /**
      * 상태 (생산중, 출고 준비완료, 배송중)
      */
-    private String status;
+    private String statusCode;
 }

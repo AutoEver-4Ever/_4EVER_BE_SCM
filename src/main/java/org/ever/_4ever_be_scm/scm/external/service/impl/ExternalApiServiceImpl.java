@@ -126,7 +126,7 @@ public class ExternalApiServiceImpl implements ExternalApiService {
 
                     // Product 조회
                     Product product = productRepository.findById(itemId).orElse(null);
-                    List<ProductStock> stockList = productStockRepository.findByProductId(itemId);
+                    List<ProductStock> stockList = productStockRepository.findByListProductId(itemId);
                     ProductStock productStock = stockList.isEmpty() ? null : stockList.get(0);
 
                     String itemName = product != null ? product.getProductName() : "알 수 없는 제품";

@@ -19,17 +19,17 @@ public class InventoryItemDto {
     /**
      * 제품 ID
      */
-    private String productId;
+    private String itemId;
     
     /**
      * 제품 코드
      */
-    private String productCode;
+    private String itemNumber;
     
     /**
      * 제품명
      */
-    private String productName;
+    private String itemName;
     
     /**
      * 카테고리
@@ -47,11 +47,6 @@ public class InventoryItemDto {
     private String warehouseType;
 
     /**
-     * 창고코드
-     */
-    private String warehouseCode;
-    
-    /**
      * 재고 수량
      */
     private Integer currentStock;
@@ -59,17 +54,17 @@ public class InventoryItemDto {
     /**
      * 단위
      */
-    private String unit;
+    private String uomName;
 
     /**
      * 단가
      */
-    private BigDecimal price;
+    private BigDecimal unitPrice;
 
     /**
      * 단가
      */
-    private BigDecimal totalValue;
+    private BigDecimal totalAmount;
     
     /**
      * 안전재고
@@ -79,7 +74,7 @@ public class InventoryItemDto {
     /**
      * 재고 상태 (정상, 주의, 위험)
      */
-    private String status;
+    private String statusCode;
 
 
 }

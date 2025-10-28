@@ -153,11 +153,8 @@ public class QuotationServiceImpl implements QuotationService {
      * 제품의 현재 재고량 조회
      */
     private Integer getCurrentStock(String productId) {
-        List<ProductStock> productStocks = productStockRepository.findByProductId(productId);
-        if (productStocks.isEmpty()) {
-            return 0;
-        }
-        
+        Optional<ProductStock> productStocks = productStockRepository.findByProductId(productId);
+
         // 모든 창고의 가용 재고량 합계
         return productStocks.stream()
             .filter(stock -> stock.getAvailableCount() != null)

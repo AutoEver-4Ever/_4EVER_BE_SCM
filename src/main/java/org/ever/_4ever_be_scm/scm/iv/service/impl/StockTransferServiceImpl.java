@@ -1,7 +1,6 @@
 package org.ever._4ever_be_scm.scm.iv.service.impl;
 
 import lombok.RequiredArgsConstructor;
-import org.ever._4ever_be_scm.scm.iv.dto.StockTransferDetailDto;
 import org.ever._4ever_be_scm.scm.iv.dto.StockTransferDto;
 import org.ever._4ever_be_scm.scm.iv.entity.ProductStockLog;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductStockLogRepository;
@@ -32,52 +31,17 @@ public class StockTransferServiceImpl implements StockTransferService {
         Page<ProductStockLog> stockLogs = productStockLogRepository.findAllStockMovements(pageable);
         return stockLogs.map(this::mapToStockTransferDto);
     }
-    
-    /**
-     * 재고 이동 상세 목록 조회
-     * 
-     * @param pageable 페이징 정보
-     * @return 재고 이동 상세 목록
-     */
-    @Override
-    public Page<StockTransferDetailDto> getStockTransfersDetail(Pageable pageable) {
-        Page<ProductStockLog> stockLogs = productStockLogRepository.findAllStockMovements(pageable);
-        return stockLogs.map(this::mapToStockTransferDetailDto);
-    }
-    
-    /**
-     * ProductStockLog 엔티티를 StockTransferDto로 변환
-     */
+
     private StockTransferDto mapToStockTransferDto(ProductStockLog stockLog) {
         //todo user연결하면 수정
         String createdByName = "메롱";
         return StockTransferDto.builder()
                 .type(stockLog.getMovementType())
                 .quantity(stockLog.getChangeCount().intValue())
-                .unit(stockLog.getProductStock().getProduct().getUnit())
+                .uomName(stockLog.getProductStock().getProduct().getUnit())
                 .itemName(stockLog.getProductStock().getProduct().getProductName())
-                .workTime(stockLog.getCreatedAt())
-                .manager(createdByName)
-                .build();
-    }
-    
-    /**
-     * ProductStockLog 엔티티를 StockTransferDetailDto로 변환
-     */
-    private StockTransferDetailDto mapToStockTransferDetailDto(ProductStockLog stockLog) {
-
-        //todo user연결하면 수정
-        String createdByName = "메롱";
-        
-        return StockTransferDetailDto.builder()
-                .type(stockLog.getMovementType())
-                .quantity(stockLog.getChangeCount().intValue())
-                .unit(stockLog.getProductStock().getProduct().getUnit())
-                .itemName(stockLog.getProductStock().getProduct().getProductName())
-                .workTime(stockLog.getCreatedAt())
-                .manager(createdByName)
-                .warehouseCode(stockLog.getToWarehouse().getWarehouseCode())
-                .referenceCode(stockLog.getReferenceCode())
+                .workDate(stockLog.getCreatedAt())
+                .managerName(createdByName)
                 .build();
     }
 }

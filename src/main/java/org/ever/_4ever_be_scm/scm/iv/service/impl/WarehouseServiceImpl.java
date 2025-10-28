@@ -49,9 +49,9 @@ public class WarehouseServiceImpl implements WarehouseService {
         // 기본 창고 정보 구성
         WarehouseDetailDto.WarehouseInfoDto warehouseInfo = WarehouseDetailDto.WarehouseInfoDto.builder()
                 .warehouseName(warehouse.getWarehouseName())
-                .warehouseCode(warehouse.getWarehouseCode())
+                .warehouseNumber(warehouse.getWarehouseCode())
                 .warehouseType(warehouse.getWarehouseType())
-                .warehouseStatus(warehouse.getStatus())
+                .statusCode(warehouse.getStatus())
                 .location(warehouse.getLocation())
                 .description(warehouse.getDescription())
                 .build();
@@ -59,9 +59,10 @@ public class WarehouseServiceImpl implements WarehouseService {
         // todo user 연결하면 추가
         // 담당자 정보 구성 (현재 구조에서는 내부 사용자 ID만 있음)
         // 실제 구현에서는 내부 사용자 저장소를 통해 조회해야 함
+        String managerId = "123";
         String managerName = "미지정";
-        String phoneNumber = "-";
-        String email = "-";
+        String managerPhone = "-";
+        String managerEmail = "-";
         
         if (warehouse.getInternalUserId() != null) {
             // 실제 구현에서는 아래와 같이 저장소를 통해 조회
@@ -74,14 +75,15 @@ public class WarehouseServiceImpl implements WarehouseService {
             
             // 간단한 구현을 위해 하드코딩
             managerName = "김창고";
-            phoneNumber = "031-123-4567";
-            email = "manager@everp.com";
+            managerPhone = "031-123-4567";
+            managerEmail = "manager@everp.com";
         }
         
         WarehouseDetailDto.ManagerDto manager = WarehouseDetailDto.ManagerDto.builder()
-                .name(managerName)
-                .phoneNumber(phoneNumber)
-                .email(email)
+                .managerId(managerId)
+                .managerName(managerName)
+                .managerPhone(managerPhone)
+                .managerEmail(managerEmail)
                 .build();
         
         // 최종 DTO 구성 및 반환
@@ -110,13 +112,13 @@ public class WarehouseServiceImpl implements WarehouseService {
         
         return WarehouseDto.builder()
                 .warehouseId(warehouse.getId())
-                .warehouseCode(warehouse.getWarehouseCode())
+                .warehouseNumber(warehouse.getWarehouseCode())
                 .warehouseName(warehouse.getWarehouseName())
-                .status(warehouse.getStatus())
+                .statusCode(warehouse.getStatus())
                 .warehouseType(warehouse.getWarehouseType())
                 .location(warehouse.getLocation())
                 .manager(managerName)
-                .phone(phoneNumber)
+                .managerPhone(phoneNumber)
                 .build();
     }
 }

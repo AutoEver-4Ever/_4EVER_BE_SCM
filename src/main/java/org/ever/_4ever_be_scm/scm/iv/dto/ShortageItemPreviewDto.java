@@ -16,32 +16,28 @@ public class ShortageItemPreviewDto {
     /**
      * 제품 ID
      */
-    private String productId;
+    private String itemId;
     
     /**
      * 제품명
      */
-    private String productName;
+    private String itemName;
     
     /**
      * 현재 재고 수량
      */
-    private int stockQuantity;
+    private int currentStock;
     
     /**
      * 안전 재고 수량
      */
     private int safetyStock;
-    
-    /**
-     * 부족 수량
-     */
-    private int shortageAmount;
 
-    private String unit;
+
+    private String uomName;
     
     /**
      * 상태 (주의, 위험)
      */
-    private String status;
+    private String statusCode;
 }
