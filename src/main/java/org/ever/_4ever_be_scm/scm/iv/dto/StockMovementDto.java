@@ -28,28 +28,30 @@ public class StockMovementDto {
     /**
      * 단위
      */
-    private String unit;
+    private String uomName;
     
     /**
      * 작업 시간
      */
-    private LocalDateTime date;
+    private LocalDateTime movementDate;
     
     /**
      * 담당자
      */
-    private String manager;
+    private String managerName;
 
     /**
      * 창고 코드
      */
-    private String toWarehouseCode;
+    private String to;
 
     /**
      * 창고 코드
      */
-    private String fromWarehouseCode;
+    private String from;
 
-    private String referenceCode;
+    private String referenceNumber;
+
+    private String note;
 
 }

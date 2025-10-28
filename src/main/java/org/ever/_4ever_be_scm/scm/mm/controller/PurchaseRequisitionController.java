@@ -67,6 +67,7 @@ public class PurchaseRequisitionController {
         // DTO to VO 변환
         PurchaseRequisitionCreateVo createVo = PurchaseRequisitionCreateVo.builder()
                 .requesterId(requestDto.getRequesterId())
+                .requesterId(requestDto.getRequesterId())
                 .items(requestDto.getItems().stream()
                         .map(item -> PurchaseRequisitionCreateVo.ItemVo.builder()
                                 .itemName(item.getItemName())
@@ -86,7 +87,7 @@ public class PurchaseRequisitionController {
         return ResponseEntity.ok(ApiResponse.success(null, "비재고성 구매요청서가 생성되었습니다.", HttpStatus.OK));
     }
 
-    @PatchMapping("/{purchaseRequisitionId}/approve")
+    @PostMapping("/{purchaseRequisitionId}/approve")
     public ResponseEntity<ApiResponse<Void>> approvePurchaseRequisition(
             @PathVariable String purchaseRequisitionId) {
         
@@ -95,7 +96,7 @@ public class PurchaseRequisitionController {
         return ResponseEntity.ok(ApiResponse.success(null, "구매요청서가 승인되었습니다.", HttpStatus.OK));
     }
 
-    @PatchMapping("/{purchaseRequisitionId}/reject")
+    @PostMapping("/{purchaseRequisitionId}/reject")
     public ResponseEntity<ApiResponse<Void>> rejectPurchaseRequisition(
             @PathVariable String purchaseRequisitionId,
             @RequestBody PurchaseRequisitionRejectRequestDto requestDto) {

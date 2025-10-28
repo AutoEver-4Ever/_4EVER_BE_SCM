@@ -48,4 +48,12 @@ public class ProductStock extends TimeStamp {
             id = String.valueOf(UuidCreator.getTimeOrderedEpoch());  // UUID v7 생성
         }
     }
+
+    public void setSafetyCount(BigDecimal safetyCount) {
+        this.safetyCount = safetyCount;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
 }

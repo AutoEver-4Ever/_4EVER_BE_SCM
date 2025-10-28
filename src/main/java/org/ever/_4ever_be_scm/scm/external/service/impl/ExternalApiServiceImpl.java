@@ -98,15 +98,16 @@ public class ExternalApiServiceImpl implements ExternalApiService {
                     Product product = productRepository.findById(id).orElse(null);
                     if (product != null) {
                         return ProductMultipleResponseDto.ProductDto.builder()
-                                .productId(id)
-                                .productNumber(product.getProductCode())
-                                .productName(product.getProductName())
+                                .itemId(id)
+                                .itemNumber(product.getProductCode())
+                                .itemName(product.getProductName())
+                                .uomName(product.getUnit())
+                                .unitPrice(product.getOriginPrice())
                                 .build();
                     }
                     return ProductMultipleResponseDto.ProductDto.builder()
-                            .productId(id)
-                            .productNumber("")
-                            .productName("제품을 찾을 수 없습니다")
+                            .itemId(id)
+                            .itemName("제품을 찾을 수 없습니다")
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -126,7 +127,7 @@ public class ExternalApiServiceImpl implements ExternalApiService {
 
                     // Product 조회
                     Product product = productRepository.findById(itemId).orElse(null);
-                    List<ProductStock> stockList = productStockRepository.findByProductId(itemId);
+                    List<ProductStock> stockList = productStockRepository.findByListProductId(itemId);
                     ProductStock productStock = stockList.isEmpty() ? null : stockList.get(0);
 
                     String itemName = product != null ? product.getProductName() : "알 수 없는 제품";
@@ -138,7 +139,7 @@ public class ExternalApiServiceImpl implements ExternalApiService {
                         shortageQuantity = BigDecimal.ZERO;
                     }
 
-                    String statusCode = shortageQuantity.compareTo(BigDecimal.ZERO) > 0 ? "SHORTAGE" : "FULFILLED";
+                    String statusCode = shortageQuantity.compareTo(BigDecimal.ZERO) > 0 ? "INSUFFICIENT" : "SUFFICIENT";
                     boolean productionRequired = shortageQuantity.compareTo(BigDecimal.ZERO) > 0;
 
                     return StockCheckResponseDto.ItemStockDto.builder()
@@ -212,4 +213,20 @@ public class ExternalApiServiceImpl implements ExternalApiService {
                 .supplierCompanies(supplierCompanies)
                 .build();
     }
+
+    @Override
+    public ProductMultipleResponseDto getItemCategoryProducts() {
+        List<Product> products = productRepository.findByCategory("ITEM");
+        List<ProductMultipleResponseDto.ProductDto> productDtos = products.stream()
+                .map(product -> ProductMultipleResponseDto.ProductDto.builder()
+                        .itemId(product.getId())
+                        .itemNumber(product.getProductCode())
+                        .itemName(product.getProductName())
+                        .uomName(product.getUnit())
+                        .unitPrice(product.getSellingPrice())
+                        .build())
+                .collect(Collectors.toList());
+        return ProductMultipleResponseDto.builder().products(productDtos).build();
+    }
+
 }

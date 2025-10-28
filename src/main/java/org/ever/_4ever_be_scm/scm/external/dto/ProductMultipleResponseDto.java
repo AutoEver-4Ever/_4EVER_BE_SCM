@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Data
@@ -19,8 +20,10 @@ public class ProductMultipleResponseDto {
     @AllArgsConstructor
     @Builder
     public static class ProductDto {
-        private String productId;
-        private String productNumber;
-        private String productName;
+        private String itemId;
+        private String itemNumber;
+        private String itemName;
+        private String uomName;
+        private BigDecimal unitPrice;
     }
 }

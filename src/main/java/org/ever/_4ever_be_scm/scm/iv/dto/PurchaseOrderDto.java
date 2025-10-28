@@ -24,12 +24,12 @@ public class PurchaseOrderDto {
     /**
      * 구매 발주 코드
      */
-    private String purchaseOrderCode;
+    private String purchaseOrderNumber;
 
     /**
      * 공급사
      */
-    private String supplier;
+    private String supplierCompanyName;
 
     /**
      * 주문 일자
@@ -49,5 +49,5 @@ public class PurchaseOrderDto {
     /**
      * 상태 (입고 대기, 입고 완료)
      */
-    private String status;
+    private String statusCode;
 }

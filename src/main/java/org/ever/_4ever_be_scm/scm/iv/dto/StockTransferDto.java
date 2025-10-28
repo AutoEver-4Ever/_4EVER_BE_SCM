@@ -28,7 +28,7 @@ public class StockTransferDto {
     /**
      * 단위
      */
-    private String unit;
+    private String uomName;
     
     /**
      * 제품명
@@ -38,10 +38,10 @@ public class StockTransferDto {
     /**
      * 작업 시간
      */
-    private LocalDateTime workTime;
+    private LocalDateTime workDate;
     
     /**
      * 담당자
      */
-    private String manager;
+    private String managerName;
 }

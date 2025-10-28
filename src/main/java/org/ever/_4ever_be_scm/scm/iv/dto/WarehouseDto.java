@@ -21,7 +21,7 @@ public class WarehouseDto {
     /**
      * 창고 코드
      */
-    private String warehouseCode;
+    private String warehouseNumber;
     
     /**
      * 창고 이름
@@ -31,7 +31,7 @@ public class WarehouseDto {
     /**
      * 상태
      */
-    private String status;
+    private String statusCode;
     
     /**
      * 창고 유형
@@ -51,5 +51,5 @@ public class WarehouseDto {
     /**
      * 연락처
      */
-    private String phone;
+    private String managerPhone;
 }

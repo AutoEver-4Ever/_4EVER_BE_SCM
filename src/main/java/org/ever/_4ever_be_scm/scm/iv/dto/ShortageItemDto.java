@@ -19,17 +19,17 @@ public class ShortageItemDto {
     /**
      * 제품 ID
      */
-    private String productId;
+    private String itemId;
     
     /**
      * 제품 코드
      */
-    private String productCode;
+    private String itemNumber;
     
     /**
      * 제품명
      */
-    private String productName;
+    private String itemName;
     
     /**
      * 카테고리
@@ -41,7 +41,7 @@ public class ShortageItemDto {
      */
     private String warehouseName;
 
-    private String warehouseCode;
+    private String warehouseNumber;
     
     /**
      * 현재 재고 수량
@@ -56,16 +56,11 @@ public class ShortageItemDto {
     /**
      * 단위
      */
-    private String unit;
-    
-    /**
-     * 부족 수량
-     */
-    private int shortageAmount;
+    private String uomName;
 
-    private BigDecimal price;
+    private BigDecimal unitPrice;
 
-    private BigDecimal totalValue;
+    private BigDecimal totalAmount;
     
     /**
      * 상태 (주의, 위험)

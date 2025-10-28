@@ -23,12 +23,12 @@ public class SalesOrderDetailDto {
     /**
      * 판매 주문 코드
      */
-    private String salesOrderCode;
+    private String salesOrderNumber;
 
     /**
      * 고객사
      */
-    private String customer;
+    private String customerCompanyName;
 
     /**
      * 납기 일자
@@ -38,7 +38,7 @@ public class SalesOrderDetailDto {
     /**
      * 상태
      */
-    private String status;
+    private String statusCode;
 
     /**
      * 주문 항목 목록
@@ -66,6 +66,6 @@ public class SalesOrderDetailDto {
         /**
          * 단위
          */
-        private String unit;
+        private String uomName;
     }
 }

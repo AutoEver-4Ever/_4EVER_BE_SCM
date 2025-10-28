@@ -4,17 +4,24 @@ import lombok.RequiredArgsConstructor;
 import org.ever._4ever_be_scm.common.exception.BusinessException;
 import org.ever._4ever_be_scm.scm.iv.dto.InventoryItemDetailDto;
 import org.ever._4ever_be_scm.scm.iv.dto.InventoryItemDto;
+import org.ever._4ever_be_scm.scm.iv.dto.PagedResponseDto;
+import org.ever._4ever_be_scm.scm.iv.dto.PageResponseDto;
 import org.ever._4ever_be_scm.scm.iv.dto.ShortageItemDto;
 import org.ever._4ever_be_scm.scm.iv.dto.ShortageItemPreviewDto;
 import org.ever._4ever_be_scm.scm.iv.dto.StockMovementDto;
+import org.ever._4ever_be_scm.scm.iv.dto.request.AddInventoryItemRequest;
 import org.ever._4ever_be_scm.scm.iv.entity.*;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductStockLogRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductStockRepository;
+import org.ever._4ever_be_scm.scm.iv.repository.ProductRepository;
+import org.ever._4ever_be_scm.scm.iv.repository.WarehouseRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.SupplierUserRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.*;
 import org.ever._4ever_be_scm.scm.iv.service.InventoryService;
 import org.ever._4ever_be_scm.scm.iv.vo.InventoryFilterVo;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,36 +42,38 @@ public class InventoryServiceImpl implements InventoryService {
 
     private final ProductStockRepository productStockRepository;
     private final ProductStockLogRepository productStockLogRepository;
-    private final SupplierUserRepository supplierUserRepository;
+    private final ProductRepository productRepository;
+    private final WarehouseRepository warehouseRepository;
 
     /**
-     * 재고 목록 조회
-     * 
-     * @param filterVo 필터 조건
-     * @param pageable 페이징 정보
-     * @return 재고 목록
+     * 재고 목록 조회 (필터링 포함)
      */
     @Override
-    public Page<InventoryItemDto> getInventoryItems(InventoryFilterVo filterVo, Pageable pageable) {
-        // 필터 조건으로 데이터베이스 조회
-        Page<ProductStock> productStocks;
-
-        String itemName = (filterVo.getItemName() == null) ? "" : filterVo.getItemName();
-
-        if (filterVo != null) {
-            productStocks = productStockRepository.findByFilters(
-                filterVo.getCategory(),
-                filterVo.getStatus(),
-                filterVo.getWarehouseId(),
-                    itemName,
-                pageable
-            );
-        } else {
-            productStocks = productStockRepository.findAll(pageable);
-        }
+    public PagedResponseDto<InventoryItemDto> getInventoryItemsWithFilters(String type, String keyword, String statusCode, Integer page, Integer size) {
+        // Repository에서 필터링된 결과를 가져옴
+        Page<ProductStock> productStocks = productStockRepository.findWithFilters(
+            type, 
+            keyword, 
+            statusCode, 
+            PageRequest.of(page, size)
+        );
         
-        // ProductStock을 InventoryItemDto로 변환
-        return productStocks.map(this::mapToInventoryItemDto);
+        List<InventoryItemDto> items = productStocks.getContent().stream()
+                .map(this::mapToInventoryItemDto)
+                .collect(Collectors.toList());
+        
+        PageResponseDto pageInfo = PageResponseDto.builder()
+                .number(page)
+                .size(size)
+                .totalElements((int) productStocks.getTotalElements())
+                .totalPages(productStocks.getTotalPages())
+                .hasNext(productStocks.hasNext())
+                .build();
+        
+        return PagedResponseDto.<InventoryItemDto>builder()
+                .content(items)
+                .page(pageInfo)
+                .build();
     }
 
     /**
@@ -75,7 +84,7 @@ public class InventoryServiceImpl implements InventoryService {
      */
     @Override
     public InventoryItemDetailDto getInventoryItemDetail(String itemId) {
-        ProductStock productStock = productStockRepository.findById(itemId)
+        ProductStock productStock = productStockRepository.findByProductId(itemId)
                 .orElseThrow(() -> new BusinessException(PRODUCT_NOT_FOUND));
 
         Product product = productStock.getProduct();
@@ -92,24 +101,25 @@ public class InventoryServiceImpl implements InventoryService {
 
         return InventoryItemDetailDto.builder()
                 // 제품 정보
-                .productId(product.getId())
-                .productName(product.getProductName())
-                .productCode(product.getProductCode())
+                .itemId(product.getId())
+                .itemName(product.getProductName())
+                .itemNumber(product.getProductCode())
                 .category(product.getCategory())
                 // 재고 정보
                 .currentStock(productStock.getTotalCount().intValue())
-                .unit(product.getUnit())
-                .price(product.getOriginPrice())
-                .totalValue(productStock.getTotalCount().multiply(product.getOriginPrice()))
+                .uomName(product.getUnit())
+                .unitPrice(product.getOriginPrice())
+                .totalAmount(productStock.getTotalCount().multiply(product.getOriginPrice()))
                 .safetyStock(productStock.getSafetyCount().intValue())
-                .status(productStock.getStatus())
+                .statusCode(productStock.getStatus())
                 // 위치 정보
+                .warehouseId(warehouse.getId())
                 .warehouseName(warehouse.getWarehouseName())
-                .warehouseCode(warehouse.getWarehouseCode())
+                .warehouseNumber(warehouse.getWarehouseCode())
                 .location(warehouse.getLocation())
-                .latestLog(latestLog != null ? latestLog.getCreatedAt() : null)
+                .lastModified(latestLog != null ? latestLog.getCreatedAt() : null)
                 // 공급사 이름
-                .supplierName(supplierCompany.getCompanyName())
+                .supplierCompanyName(supplierCompany.getCompanyName())
                 // 재고 이동 내역
                 .stockMovement(stockMovements)
                 .build();
@@ -158,19 +168,18 @@ public class InventoryServiceImpl implements InventoryService {
         BigDecimal totalPrice = productStock.getTotalCount().multiply(product.getOriginPrice());
 
         return InventoryItemDto.builder()
-                .productId(product.getId())
-                .productCode(product.getProductCode())
-                .productName(product.getProductName())
+                .itemId(product.getId())
+                .itemNumber(product.getProductCode())
+                .itemName(product.getProductName())
                 .category(product.getCategory())
                 .currentStock(productStock.getTotalCount().intValue())
                 .safetyStock(productStock.getSafetyCount().intValue())
-                .unit(product.getUnit())
-                .price(product.getOriginPrice())
-                .totalValue(totalPrice)
+                .uomName(product.getUnit())
+                .unitPrice(product.getOriginPrice())
+                .totalAmount(totalPrice)
                 .warehouseName(warehouse.getWarehouseName())
                 .warehouseType(warehouse.getWarehouseType())
-                .warehouseCode(warehouse.getWarehouseCode())
-                .status(productStock.getStatus())
+                .statusCode(productStock.getStatus())
                 .build();
     }
     
@@ -195,12 +204,13 @@ public class InventoryServiceImpl implements InventoryService {
         return StockMovementDto.builder()
                 .type(stockLog.getMovementType())
                 .quantity(stockLog.getChangeCount().intValue())
-                .unit(stockLog.getProductStock().getProduct().getUnit())
-                .date(stockLog.getCreatedAt())
-                .manager(createdByName)
-                .toWarehouseCode(toWarehouseCode)
-                .fromWarehouseCode(formWarehouseCode)
-                .referenceCode(stockLog.getReferenceCode())
+                .uomName(stockLog.getProductStock().getProduct().getUnit())
+                .movementDate(stockLog.getCreatedAt())
+                .managerName(createdByName)
+                .to(toWarehouseCode)
+                .from(formWarehouseCode)
+                .referenceNumber(stockLog.getReferenceCode())
+                .note(null)
                 .build();
     }
     
@@ -213,22 +223,20 @@ public class InventoryServiceImpl implements InventoryService {
         
         int currentStock = productStock.getTotalCount().intValue();
         int safetyStock = productStock.getSafetyCount().intValue();
-        int shortageAmount = Math.max(0, safetyStock - currentStock);
         BigDecimal totalPrice = productStock.getTotalCount().multiply(product.getOriginPrice());
         
         return ShortageItemDto.builder()
-                .productId(product.getId())
-                .productCode(product.getProductCode())
-                .productName(product.getProductName())
+                .itemId(product.getId())
+                .itemNumber(product.getProductCode())
+                .itemName(product.getProductName())
                 .category(product.getCategory())
                 .warehouseName(warehouse.getWarehouseName())
-                .warehouseCode(warehouse.getWarehouseCode())
+                .warehouseNumber(warehouse.getWarehouseCode())
                 .currentStock(currentStock)
                 .safetyStock(safetyStock)
-                .price(product.getOriginPrice())
-                .totalValue(totalPrice)
-                .unit(product.getUnit())
-                .shortageAmount(shortageAmount)
+                .unitPrice(product.getOriginPrice())
+                .totalAmount(totalPrice)
+                .uomName(product.getUnit())
                 .status(productStock.getStatus())
                 .build();
     }
@@ -241,16 +249,86 @@ public class InventoryServiceImpl implements InventoryService {
         
         int currentStock = productStock.getTotalCount().intValue();
         int safetyStock = productStock.getSafetyCount().intValue();
-        int shortageAmount = Math.max(0, safetyStock - currentStock);
         
         return ShortageItemPreviewDto.builder()
-                .productId(product.getId())
-                .productName(product.getProductName())
-                .unit(product.getUnit())
-                .stockQuantity(currentStock)
+                .itemId(product.getId())
+                .itemName(product.getProductName())
+                .uomName(product.getUnit())
+                .currentStock(currentStock)
                 .safetyStock(safetyStock)
-                .shortageAmount(shortageAmount)
-                .status(productStock.getStatus())
+                .statusCode(productStock.getStatus())
                 .build();
+    }
+
+    /**
+     * 재고 추가
+     */
+    @Override
+    @Transactional
+    public void addInventoryItem(AddInventoryItemRequest request) {
+        // Product 존재 확인
+        Product product = productRepository.findById(request.getItemId())
+                .orElseThrow(() -> new BusinessException(PRODUCT_NOT_FOUND));
+        
+        // Warehouse 존재 확인
+        Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
+                .orElseThrow(() -> new RuntimeException("창고를 찾을 수 없습니다."));
+        
+        // ProductStock 중복 확인
+        if (productStockRepository.findByProductIdAndWarehouseId(request.getItemId(), request.getWarehouseId()).isPresent()) {
+            throw new RuntimeException("이미 해당 창고에 재고가 존재합니다.");
+        }
+        
+        // ProductStock 생성
+        ProductStock productStock = ProductStock.builder()
+                .product(product)
+                .warehouse(warehouse)
+                .totalCount(BigDecimal.valueOf(request.getCurrentStock()))
+                .availableCount(BigDecimal.valueOf(request.getCurrentStock()))
+                .safetyCount(BigDecimal.valueOf(request.getSafetyStock()))
+                .status(calculateStatus(request.getCurrentStock(), request.getSafetyStock()))
+                .build();
+        
+        productStockRepository.save(productStock);
+    }
+
+    /**
+     * 안전재고 수정
+     */
+    @Override
+    @Transactional
+    public void updateSafetyStock(String itemId, Integer safetyStock) {
+        List<ProductStock> productStocks = productStockRepository.findByListProductId(itemId);
+        
+        if (productStocks.isEmpty()) {
+            throw new RuntimeException("해당 제품의 재고를 찾을 수 없습니다.");
+        }
+        
+        // 모든 창고의 해당 제품 안전재고 업데이트
+        for (ProductStock productStock : productStocks) {
+            productStock.setSafetyCount(BigDecimal.valueOf(safetyStock));
+            // 상태 재계산
+            productStock.setStatus(calculateStatus(productStock.getTotalCount().intValue(), safetyStock));
+            productStockRepository.save(productStock);
+        }
+    }
+
+    /**
+     * 재고 상태 계산
+     */
+    private String calculateStatus(Integer currentStock, Integer safetyStock) {
+        if (currentStock == null || safetyStock == null || safetyStock == 0) {
+            return "NORMAL";
+        }
+        
+        double ratio = (double) currentStock / safetyStock;
+        
+        if (ratio >= 1.0) {
+            return "NORMAL";  // 안전재고 이상
+        } else if (ratio >= 0.7) {
+            return "CAUTION"; // 안전재고의 70% 이상 ~ 100% 미만
+        } else {
+            return "URGENT";  // 안전재고의 70% 미만
+        }
     }
 }

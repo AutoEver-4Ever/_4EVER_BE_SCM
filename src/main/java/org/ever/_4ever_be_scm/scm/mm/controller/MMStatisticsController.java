@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "구매관리", description = "구매 관리 API")
 @RestController
-@RequestMapping("/scm-pp/mm")
+@RequestMapping("api/scm-pp/mm")
 @RequiredArgsConstructor
 public class MMStatisticsController {
 
