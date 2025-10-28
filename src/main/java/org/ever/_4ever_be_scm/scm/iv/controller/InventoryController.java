@@ -88,7 +88,7 @@ public class InventoryController {
      * @param safetyStock 안전재고 수량
      * @return 수정 결과
      */
-    @PutMapping("/items/{itemId}/safety-stock")
+    @PatchMapping("/items/{itemId}/safety-stock")
     @io.swagger.v3.oas.annotations.Operation(
             summary = "안전재고 수정",
             description = "itemId(productId)를 받아서 productStock의 safetyStock값을 변경합니다."
@@ -109,6 +109,9 @@ public class InventoryController {
      * @return 재고 상세 정보
      */
     @GetMapping("/items/{itemId}")
+    @io.swagger.v3.oas.annotations.Operation(
+            summary = "재고 상세 조회"
+    )
     public ResponseEntity<ApiResponse<InventoryItemDetailDto>> getInventoryItemDetail(@PathVariable String itemId) {
         InventoryItemDetailDto itemDetail = inventoryService.getInventoryItemDetail(itemId);
         
@@ -124,6 +127,9 @@ public class InventoryController {
      * @return 부족 재고 목록
      */
     @GetMapping("/shortage")
+    @io.swagger.v3.oas.annotations.Operation(
+            summary = "부족 재고 목록 조회"
+    )
     public ResponseEntity<ApiResponse<PagedResponseDto<ShortageItemDto>>> getShortageItems(
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
@@ -141,6 +147,9 @@ public class InventoryController {
      * @return 부족 재고 간단 정보 목록
      */
     @GetMapping("/shortage/preview")
+    @io.swagger.v3.oas.annotations.Operation(
+            summary = "부족 재고 간단 조회"
+    )
     public ResponseEntity<ApiResponse<PagedResponseDto<ShortageItemPreviewDto>>> getShortageItemsPreview() {
         Page<ShortageItemPreviewDto> items = inventoryService.getShortageItemsPreview(PageRequest.of(0, 5));
         PagedResponseDto<ShortageItemPreviewDto> response = PagedResponseDto.from(items);
