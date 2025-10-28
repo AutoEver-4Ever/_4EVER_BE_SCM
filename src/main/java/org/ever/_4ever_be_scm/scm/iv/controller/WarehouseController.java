@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @Tag(name = "재고관리", description = "재고 관리 API")
 @RestController
-@RequestMapping("/api/scm-pp/iv/warehouses")
+@RequestMapping("/scm-pp/iv/warehouses")
 @RequiredArgsConstructor
 public class WarehouseController {
 

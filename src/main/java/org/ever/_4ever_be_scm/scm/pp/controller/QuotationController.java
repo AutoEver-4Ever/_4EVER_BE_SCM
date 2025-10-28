@@ -16,7 +16,7 @@ import java.util.List;
 
 @Tag(name = "생산관리", description = "생산 관리 API")
 @RestController
-@RequestMapping("/api/scm-pp/pp/quotations")
+@RequestMapping("/scm-pp/pp/quotations")
 @RequiredArgsConstructor
 public class QuotationController {
     

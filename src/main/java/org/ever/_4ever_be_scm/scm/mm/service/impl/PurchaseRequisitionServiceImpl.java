@@ -238,11 +238,14 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
         
         // 1. 승인 상태 변경
         ProductRequestApproval approval = productRequest.getApprovalId();
-        
-        approval.setApprovalStatus("APPROVED");
-        approval.setApprovedAt(LocalDate.now());
-        approval.setApprovedBy("system");
-        productRequestApprovalRepository.save(approval);
+
+        ProductRequestApproval updatedApproval = approval.toBuilder()
+                .approvalStatus("APPROVAL")
+                .approvedAt(LocalDateTime.now())
+                .approvedBy("system")
+                .build();
+
+        productRequestApprovalRepository.save(updatedApproval);
         
         // 2. 발주서 자동 생성
         createPurchaseOrderFromRequest(productRequest);
@@ -253,16 +256,20 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
     public void rejectPurchaseRequisition(String purchaseRequisitionId, PurchaseRequisitionRejectRequestDto requestDto) {
         ProductRequest productRequest = productRequestRepository.findById(purchaseRequisitionId)
                 .orElseThrow(() -> new IllegalArgumentException("구매요청서를 찾을 수 없습니다."));
-        
-        ProductRequestApproval approval = productRequest.getApprovalId();
-        
-        approval.setApprovalStatus("REJECTED");
-        approval.setRejectedReason(requestDto.getComment());
-        approval.setApprovedAt(LocalDate.now());
-        approval.setApprovedBy("system");
 
-        productRequestApprovalRepository.save(approval);
+        ProductRequestApproval approval = productRequest.getApprovalId();
+
+        //빌더를 이용해 새 객체 생성 (기존 값 유지하면서 일부 필드만 변경)
+        ProductRequestApproval updatedApproval = approval.toBuilder()
+                .approvalStatus("REJECTED")
+                .rejectedReason(requestDto.getComment())
+                .approvedAt(LocalDateTime.now())
+                .approvedBy("system")
+                .build();
+
+        productRequestApprovalRepository.save(updatedApproval);
     }
+
 
     private void createPurchaseOrderFromRequest(ProductRequest productRequest) {
         // 구매요청서의 아이템들을 조회

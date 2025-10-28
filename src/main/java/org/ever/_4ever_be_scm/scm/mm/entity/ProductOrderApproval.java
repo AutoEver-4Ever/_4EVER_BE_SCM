@@ -12,10 +12,9 @@ import java.util.UUID;
 @Entity
 @Table(name = "product_order_approval")
 @Getter
-@Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@Builder(toBuilder = true)
 @EqualsAndHashCode(callSuper = false)
 public class ProductOrderApproval extends TimeStamp {
     @Id
