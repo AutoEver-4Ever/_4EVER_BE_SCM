@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ProductStockRepository extends JpaRepository<ProductStock, String> {
@@ -43,5 +44,23 @@ public interface ProductStockRepository extends JpaRepository<ProductStock, Stri
     long countShortageItemsByStatus(@Param("status") String status);
     
     @Query("SELECT ps FROM ProductStock ps WHERE ps.product.id = :productId")
-    List<ProductStock> findByProductId(@Param("productId") String productId);
+    List<ProductStock> findByListProductId(@Param("productId") String productId);
+
+    @Query("SELECT ps FROM ProductStock ps WHERE ps.product.id = :productId")
+    Optional<ProductStock> findByProductId(@Param("productId") String productId);
+
+    @Query("SELECT ps FROM ProductStock ps " +
+           "JOIN FETCH ps.product p " +
+           "JOIN FETCH ps.warehouse w " +
+           "WHERE (:type IS NULL OR :keyword IS NULL OR :keyword = '' OR " +
+           "       (:type = 'WAREHOUSE_NAME' AND w.warehouseName LIKE CONCAT('%', :keyword, '%')) OR " +
+           "       (:type = 'ITEM_NAME' AND p.productName LIKE CONCAT('%', :keyword, '%'))) " +
+           "AND (:statusCode IS NULL OR :statusCode = 'ALL' OR ps.status = :statusCode)")
+    Page<ProductStock> findWithFilters(
+            @Param("type") String type,
+            @Param("keyword") String keyword,
+            @Param("statusCode") String statusCode,
+            Pageable pageable);
+
+    Optional<Object> findByProductIdAndWarehouseId(String itemId, String warehouseId);
 }

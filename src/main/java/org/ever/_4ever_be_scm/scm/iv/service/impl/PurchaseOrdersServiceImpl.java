@@ -49,12 +49,12 @@ public class PurchaseOrdersServiceImpl implements PurchaseOrdersService {
         List<PurchaseOrderDto> purchaseOrderDtos = productOrders.getContent().stream()
                 .map(po -> PurchaseOrderDto.builder()
                         .purchaseOrderId(po.getId())
-                        .purchaseOrderCode(po.getProductOrderCode())
-                        .supplier(po.getSupplierCompanyName())
+                        .purchaseOrderNumber(po.getProductOrderCode())
+                        .supplierCompanyName(po.getSupplierCompanyName())
                         .orderDate(po.getCreatedAt())
                         .dueDate(po.getDueDate())
                         .totalAmount(po.getTotalPrice())
-                        .status(po.getApprovalId().getApprovalStatus())
+                        .statusCode(po.getApprovalId().getApprovalStatus())
                         .build())
                 .collect(Collectors.toList());
 
