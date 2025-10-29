@@ -10,17 +10,14 @@ import org.ever._4ever_be_scm.scm.iv.dto.ShortageItemDto;
 import org.ever._4ever_be_scm.scm.iv.dto.ShortageItemPreviewDto;
 import org.ever._4ever_be_scm.scm.iv.dto.StockMovementDto;
 import org.ever._4ever_be_scm.scm.iv.dto.request.AddInventoryItemRequest;
+import org.ever._4ever_be_scm.scm.iv.dto.response.ItemToggleResponseDto;
 import org.ever._4ever_be_scm.scm.iv.entity.*;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductStockLogRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductStockRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.WarehouseRepository;
-import org.ever._4ever_be_scm.scm.iv.repository.SupplierUserRepository;
-import org.ever._4ever_be_scm.scm.iv.repository.*;
 import org.ever._4ever_be_scm.scm.iv.service.InventoryService;
-import org.ever._4ever_be_scm.scm.iv.vo.InventoryFilterVo;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -329,5 +326,37 @@ public class InventoryServiceImpl implements InventoryService {
         } else {
             return "URGENT";  // 안전재고의 70% 미만
         }
+    }
+    
+    /**
+     * 자재 품목 토글 목록 조회
+     * product 엔티티에는 존재하지만 productStock 엔티티에는 존재하지 않는 product 조회
+     * 
+     * @return 재고에 존재하지 않는 자재 품목 목록
+     */
+    @Override
+    public List<ItemToggleResponseDto> getItemToggleList() {
+        // ProductStock에 존재하지 않는 Product 목록 조회
+        List<Product> productsNotInStock = productRepository.findProductsNotInStock();
+        
+        return productsNotInStock.stream()
+                .map(this::mapToItemToggleResponseDto)
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * Product 엔티티를 ItemToggleResponseDto로 변환
+     */
+    private ItemToggleResponseDto mapToItemToggleResponseDto(Product product) {
+        SupplierCompany supplierCompany = product.getSupplierCompany();
+        
+        return ItemToggleResponseDto.builder()
+                .supplierCompanyName(supplierCompany != null ? supplierCompany.getCompanyName() : "미지정")
+                .uomName(product.getUnit())
+                .supplierCompanyId(supplierCompany != null ? supplierCompany.getId() : "")
+                .itemIdName(product.getProductName())
+                .itemId(product.getId())
+                .unitPrice(product.getOriginPrice())
+                .build();
     }
 }

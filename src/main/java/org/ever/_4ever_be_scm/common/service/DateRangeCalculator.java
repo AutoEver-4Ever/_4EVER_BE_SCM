@@ -8,11 +8,6 @@ import java.util.*;
 
 @Component
 public class DateRangeCalculator {
-
-    public enum PeriodType {
-        WEEK, MONTH, QUARTER, YEAR
-    }
-
     /**
      * 기준 날짜와 기간 타입(WEEK, MONTH, QUARTER, YEAR)에 따라
      * 저번 기간과 이번 기간을 함께 반환
