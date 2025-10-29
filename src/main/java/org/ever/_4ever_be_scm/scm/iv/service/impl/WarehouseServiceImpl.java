@@ -1,6 +1,7 @@
 package org.ever._4ever_be_scm.scm.iv.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import org.ever._4ever_be_scm.common.exception.BusinessException;
 import org.ever._4ever_be_scm.scm.iv.dto.*;
 import org.ever._4ever_be_scm.scm.iv.entity.Warehouse;
 import org.ever._4ever_be_scm.scm.iv.repository.WarehouseRepository;
@@ -53,7 +54,7 @@ public class WarehouseServiceImpl implements WarehouseService {
         WarehouseDetailDto.WarehouseInfoDto warehouseInfo = WarehouseDetailDto.WarehouseInfoDto.builder()
                 .warehouseName(warehouse.getWarehouseName())
                 .warehouseNumber(warehouse.getWarehouseCode())
-                .warehouseType(warehouse.getWarehouseType())
+                .warehouseType(mapCategory(warehouse.getWarehouseType()))
                 .statusCode(warehouse.getStatus())
                 .location(warehouse.getLocation())
                 .description(warehouse.getDescription())
@@ -118,7 +119,7 @@ public class WarehouseServiceImpl implements WarehouseService {
                 .warehouseNumber(warehouse.getWarehouseCode())
                 .warehouseName(warehouse.getWarehouseName())
                 .statusCode(warehouse.getStatus())
-                .warehouseType(warehouse.getWarehouseType())
+                .warehouseType(mapCategory(warehouse.getWarehouseType()))
                 .location(warehouse.getLocation())
                 .manager(managerName)
                 .managerPhone(phoneNumber)
@@ -161,6 +162,10 @@ public class WarehouseServiceImpl implements WarehouseService {
     public void updateWarehouse(String warehouseId, WarehouseUpdateRequestDto request) {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new NoSuchElementException("창고를 찾을 수 없습니다."));
+
+        if(!warehouse.getWarehouseType().equals(request.getWarehouseType())) {
+            throw new RuntimeException("창고 유형은 변경이 불가능 합니다");
+        }
         
         // 부분 업데이트 - null이 아닌 값만 업데이트
         Warehouse updatedWarehouse = Warehouse.builder()
@@ -205,5 +210,22 @@ public class WarehouseServiceImpl implements WarehouseService {
         return WarehouseDropdownResponseDto.builder()
                 .warehouses(items)
                 .build();
+    }
+
+    /**
+     * 타입 or 카테고리 변환
+     */
+    private String mapCategory(String category) {
+        if (category == null) return "기타";
+
+        switch (category) {
+            case "ITEM":
+                return "부품";
+            case "MATERIAL":
+                return "원자재";
+            case "ETC":
+            default:
+                return "기타";
+        }
     }
 }

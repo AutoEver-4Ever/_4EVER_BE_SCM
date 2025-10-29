@@ -30,7 +30,7 @@ public class ItemToggleResponseDto {
     /**
      * 품목명
      */
-    private String itemIdName;
+    private String itemName;
     
     /**
      * 품목 ID

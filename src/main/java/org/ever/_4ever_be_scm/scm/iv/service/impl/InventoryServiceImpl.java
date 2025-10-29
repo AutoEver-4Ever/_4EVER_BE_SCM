@@ -101,7 +101,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .itemId(product.getId())
                 .itemName(product.getProductName())
                 .itemNumber(product.getProductCode())
-                .category(product.getCategory())
+                .category(mapCategory(product.getCategory()))
                 // 재고 정보
                 .currentStock(productStock.getAvailableCount().intValue())
                 .uomName(product.getUnit())
@@ -168,14 +168,14 @@ public class InventoryServiceImpl implements InventoryService {
                 .itemId(product.getId())
                 .itemNumber(product.getProductCode())
                 .itemName(product.getProductName())
-                .category(product.getCategory())
+                .category(mapCategory(product.getCategory()))
                 .currentStock(productStock.getAvailableCount().intValue())
                 .safetyStock(productStock.getSafetyCount().intValue())
                 .uomName(product.getUnit())
                 .unitPrice(product.getOriginPrice())
                 .totalAmount(totalPrice)
                 .warehouseName(warehouse.getWarehouseName())
-                .warehouseType(warehouse.getWarehouseType())
+                .warehouseType(mapCategory(warehouse.getWarehouseType()))
                 .statusCode(productStock.getStatus())
                 .build();
     }
@@ -354,9 +354,27 @@ public class InventoryServiceImpl implements InventoryService {
                 .supplierCompanyName(supplierCompany != null ? supplierCompany.getCompanyName() : "미지정")
                 .uomName(product.getUnit())
                 .supplierCompanyId(supplierCompany != null ? supplierCompany.getId() : "")
-                .itemIdName(product.getProductName())
+                .itemName(product.getProductName())
                 .itemId(product.getId())
                 .unitPrice(product.getOriginPrice())
                 .build();
     }
+
+    /**
+     * 타입 or 카테고리 변환
+     */
+    private String mapCategory(String category) {
+        if (category == null) return "기타";
+
+        switch (category) {
+            case "ITEM":
+                return "부품";
+            case "MATERIAL":
+                return "원자재";
+            case "ETC":
+            default:
+                return "기타";
+        }
+    }
+
 }
