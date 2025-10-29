@@ -29,6 +29,7 @@ public class PurchaseOrderController {
     @GetMapping
     public ResponseEntity<ApiResponse<PagedResponseDto<PurchaseOrderListResponseDto>>> getPurchaseOrderList(
             @RequestParam(defaultValue = "ALL") String statusCode,
+            @io.swagger.v3.oas.annotations.Parameter(description = "검색 타입 (SupplierCompanyName, PurchaseOrderNumber)")
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,

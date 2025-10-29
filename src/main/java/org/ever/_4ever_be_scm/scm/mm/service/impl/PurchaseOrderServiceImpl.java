@@ -60,7 +60,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                     String type = searchVo.getType();
                     String keyword = searchVo.getKeyword();
                     if (keyword != null && !keyword.isEmpty()) {
-                        if ("supplierName".equalsIgnoreCase(type)) {
+                        if ("SupplierCompanyName".equalsIgnoreCase(type)) {
                             // 첫 번째 아이템의 제품에서 supplierCompany를 찾아서 이름으로 매칭
                             List<ProductOrderItem> items = productOrderItemRepository.findByProductOrderId(order.getId());
                             if (items.isEmpty()) return false;
@@ -71,7 +71,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                                 supplierName = product.getSupplierCompany().getCompanyName();
                             }
                             if (supplierName == null || !supplierName.toLowerCase().contains(keyword.toLowerCase())) return false;
-                        } else if ("purchaseOrderNumber".equalsIgnoreCase(type)) {
+                        } else if ("PurchaseOrderNumber".equalsIgnoreCase(type)) {
                             if (order.getProductOrderCode() == null || !order.getProductOrderCode().toLowerCase().contains(keyword.toLowerCase())) return false;
                         }
                     }
