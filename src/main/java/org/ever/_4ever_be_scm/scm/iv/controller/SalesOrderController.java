@@ -84,4 +84,21 @@ public class SalesOrderController {
         
         return ResponseEntity.ok(ApiResponse.success(salesOrderDetail, "출고 준비 완료 주문 상세를 조회했습니다.", HttpStatus.OK));
     }
+
+    /**
+     * 생산중 상세 조회 API
+     *
+     * @param salesOrderId 판매 주문 ID
+     * @return 생산중 상세 정보
+     */
+    @GetMapping("/sales-orders/production/{salesOrderId}")
+    @io.swagger.v3.oas.annotations.Operation(
+            summary = "생산중 상세 조회"
+    )
+    public ResponseEntity<ApiResponse<SalesOrderDetailDto>> getProductionOrder(@PathVariable String salesOrderId) {
+        // 서비스 호출
+        SalesOrderDetailDto salesOrderDetail = salesOrderService.getProductionDetail(salesOrderId);
+
+        return ResponseEntity.ok(ApiResponse.success(salesOrderDetail, "출고 준비 완료 주문 상세를 조회했습니다.", HttpStatus.OK));
+    }
 }

@@ -93,10 +93,10 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         // 페이징 처리
         return new PageImpl<>(salesOrders, pageable, salesOrders.size());
     }
-    
+
     /**
      * 출고 준비 완료 판매 주문 상세 조회
-     * 
+     *
      * @param salesOrderId 판매 주문 ID
      * @return 출고 준비 완료 판매 주문 상세 정보
      */
@@ -122,5 +122,35 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                     .build()
             ))
             .build();
+    }
+
+    /**
+     * 생산중 완료 판매 주문 상세 조회
+     *
+     * @param salesOrderId 판매 주문 ID
+     * @return 생산중 판매 주문 상세 정보
+     */
+    @Override
+    public SalesOrderDetailDto getProductionDetail(String salesOrderId) {
+        // 임시 데이터 생성 (추후 레포지토리 연결 예정)
+        return SalesOrderDetailDto.builder()
+                .salesOrderId(salesOrderId)
+                .salesOrderNumber("SO-2024-002")
+                .customerCompanyName("현대건설")
+                .dueDate("2024-01-22T16:54")
+                .statusCode("IN_PRODUCTION")
+                .orderItems(Arrays.asList(
+                        SalesOrderDetailDto.OrderItemDto.builder()
+                                .itemName("볼트 M8x20")
+                                .quantity(500)
+                                .uomName("EA")
+                                .build(),
+                        SalesOrderDetailDto.OrderItemDto.builder()
+                                .itemName("베어링 6205")
+                                .quantity(20)
+                                .uomName("EA")
+                                .build()
+                ))
+                .build();
     }
 }

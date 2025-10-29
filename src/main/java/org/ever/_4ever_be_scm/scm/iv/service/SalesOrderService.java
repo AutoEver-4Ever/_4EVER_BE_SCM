@@ -32,4 +32,12 @@ public interface SalesOrderService {
      * @return 출고 준비 완료 판매 주문 상세 정보
      */
     SalesOrderDetailDto getReadyToShipOrderDetail(String salesOrderId);
+
+    /**
+     * 생산중 판매 주문 상세 조회
+     *
+     * @param salesOrderId 판매 주문 ID
+     * @return 생산중 판매 주문 상세 정보
+     */
+    SalesOrderDetailDto getProductionDetail(String salesOrderId);
 }
