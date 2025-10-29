@@ -133,7 +133,7 @@ public class InventoryServiceImpl implements InventoryService {
     public Page<ShortageItemDto> getShortageItems(String status, Pageable pageable) {
         Page<ProductStock> shortageItems;
         
-        if (status != null && !status.isEmpty()) {
+        if (!status.equals("ALL")) {
             shortageItems = productStockRepository.findShortageItems(status, pageable);
         } else {
             shortageItems = productStockRepository.findAllShortageItems(pageable);
@@ -234,7 +234,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .unitPrice(product.getOriginPrice())
                 .totalAmount(totalPrice)
                 .uomName(product.getUnit())
-                .status(productStock.getStatus())
+                .statusCode(productStock.getStatus())
                 .build();
     }
     

@@ -59,4 +59,32 @@ public interface ProductStockRepository extends JpaRepository<ProductStock, Stri
             Pageable pageable);
 
     Optional<Object> findByProductIdAndWarehouseId(String itemId, String warehouseId);
+    
+    /**
+     * 상태별 ProductStock 개수 조회
+     * 
+     * @param status 상태
+     * @return 해당 상태의 ProductStock 개수
+     */
+    long countByStatus(String status);
+    
+    /**
+     * 날짜 범위와 상태별 ProductStock 개수 조회
+     * 
+     * @param status 상태
+     * @param startDate 시작일
+     * @param endDate 종료일
+     * @return 해당 조건의 ProductStock 개수
+     */
+    long countByStatusAndUpdatedAtBetween(String status, java.time.LocalDateTime startDate, java.time.LocalDateTime endDate);
+    
+    /**
+     * 날짜 범위 내 총 재고 가치 계산
+     * 
+     * @param startDate 시작일
+     * @param endDate 종료일
+     * @return 총 재고 가치
+     */
+    @Query("SELECT SUM(ps.availableCount * p.originPrice) FROM ProductStock ps JOIN ps.product p WHERE ps.createdAt BETWEEN :startDate AND :endDate")
+    java.util.Optional<java.math.BigDecimal> sumTotalStockValueByDateBetween(@Param("startDate") java.time.LocalDateTime startDate, @Param("endDate") java.time.LocalDateTime endDate);
 }
