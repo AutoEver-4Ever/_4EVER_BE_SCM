@@ -77,4 +77,13 @@ public class MMStatisticsController {
         );
     return ApiResponse.success(list, "카테고리 목록 조회 성공", org.springframework.http.HttpStatus.OK);
     }
+
+    @GetMapping("/supplier/search-type/toggle")
+    public ApiResponse<List<ToggleCodeLabelDto>> getSearchTypeToggle() {
+        List<ToggleCodeLabelDto> list = List.of(
+                new ToggleCodeLabelDto("공급 업체명", "SupplierCompanyNumber"),
+                new ToggleCodeLabelDto("공급 업체 번호", "SupplierCompanyName")
+        );
+        return ApiResponse.success(list, "카테고리 목록 조회 성공", org.springframework.http.HttpStatus.OK);
+    }
 }

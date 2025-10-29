@@ -12,6 +12,8 @@ import lombok.NoArgsConstructor;
 public class SupplierSearchVo {
     private String statusCode;
     private String category;
+    private String type;
+    private String keyword;
     private int page;
     private int size;
 }

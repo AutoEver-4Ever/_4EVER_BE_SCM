@@ -47,6 +47,30 @@ public class SupplierServiceImpl implements SupplierService {
             if (!"ALL".equals(searchVo.getCategory()) && !category.equals(searchVo.getCategory())) {
                 continue;
             }
+            
+            // type과 keyword 검색 필터 추가
+            if (searchVo.getType() != null && searchVo.getKeyword() != null && !searchVo.getKeyword().trim().isEmpty()) {
+                boolean matchesSearch = false;
+                String keyword = searchVo.getKeyword().toLowerCase();
+                
+                if ("SupplierCompanyNumber".equals(searchVo.getType())) {
+                    // 공급업체 번호로 검색
+                    if (supplierCompany.getCompanyCode() != null && 
+                        supplierCompany.getCompanyCode().toLowerCase().contains(keyword)) {
+                        matchesSearch = true;
+                    }
+                } else if ("SupplierCompanyName".equals(searchVo.getType())) {
+                    // 공급업체명으로 검색
+                    if (supplierCompany.getCompanyName() != null && 
+                        supplierCompany.getCompanyName().toLowerCase().contains(keyword)) {
+                        matchesSearch = true;
+                    }
+                }
+                
+                if (!matchesSearch) {
+                    continue;
+                }
+            }
 
             dtoList.add(SupplierListResponseDto.builder()
                     .statusCode(status)

@@ -22,15 +22,29 @@ public class SupplierController {
     private final SupplierService supplierService;
 
     @GetMapping
+    @io.swagger.v3.oas.annotations.Operation(
+            summary = "공급업체 목록 조회",
+            description = "공급업체 목록을 조회합니다. 상태코드, 카테고리, 검색타입(SupplierCompanyNumber/SupplierCompanyName)과 키워드로 필터링 가능"
+    )
     public ResponseEntity<ApiResponse<PagedResponseDto<SupplierListResponseDto>>> getSupplierList(
+            @io.swagger.v3.oas.annotations.Parameter(description = "상태코드 (ALL, ACTIVE, INACTIVE)")
             @RequestParam(defaultValue = "ALL") String statusCode,
+            @io.swagger.v3.oas.annotations.Parameter(description = "카테고리 (ALL, MATERIAL, ITEM, ETC)")
             @RequestParam(defaultValue = "ALL") String category,
+            @io.swagger.v3.oas.annotations.Parameter(description = "검색 타입 (SupplierCompanyNumber, SupplierCompanyName)")
+            @RequestParam(required = false) String type,
+            @io.swagger.v3.oas.annotations.Parameter(description = "검색 키워드")
+            @RequestParam(required = false) String keyword,
+            @io.swagger.v3.oas.annotations.Parameter(description = "페이지 번호")
             @RequestParam(defaultValue = "0") int page,
+            @io.swagger.v3.oas.annotations.Parameter(description = "페이지 크기")
             @RequestParam(defaultValue = "10") int size) {
         
         SupplierSearchVo searchVo = SupplierSearchVo.builder()
                 .statusCode(statusCode)
                 .category(category)
+                .type(type)
+                .keyword(keyword)
                 .page(page)
                 .size(size)
                 .build();
