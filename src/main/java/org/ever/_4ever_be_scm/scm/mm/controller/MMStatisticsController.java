@@ -33,7 +33,7 @@ public class MMStatisticsController {
         }
     }
 
-    @GetMapping("/purchase_requisition/status/toggle")
+    @GetMapping("/purchase-requisition/status/toggle")
     public ApiResponse<List<ToggleCodeLabelDto>> getPurchaseRequisitionStatusToggle() {
         List<ToggleCodeLabelDto> list = List.of(
             new ToggleCodeLabelDto("전체", "ALL"),
@@ -42,6 +42,16 @@ public class MMStatisticsController {
             new ToggleCodeLabelDto("반려", "REJECTED")
         );
     return ApiResponse.success(list, "상태 목록 조회 성공", org.springframework.http.HttpStatus.OK);
+    }
+
+    @GetMapping("/purchase-requisition/search-type/toggle")
+    public ApiResponse<List<ToggleCodeLabelDto>> getPurchaseRequisitionSearchTypeToggle() {
+        List<ToggleCodeLabelDto> list = List.of(
+                new ToggleCodeLabelDto("요청자 이름", "requesterName"),
+                new ToggleCodeLabelDto("부서명", "departmentName"),
+                new ToggleCodeLabelDto("구매요청서 번호","productRequestNumber")
+        );
+        return ApiResponse.success(list, "카테고리 목록 조회 성공", org.springframework.http.HttpStatus.OK);
     }
 
     @GetMapping("/purchase-orders/status/toggle")
@@ -55,6 +65,15 @@ public class MMStatisticsController {
             new ToggleCodeLabelDto("배송완료", "DELIVERED")
         );
     return ApiResponse.success(list, "상태 목록 조회 성공", org.springframework.http.HttpStatus.OK);
+    }
+
+    @GetMapping("/purchase-orders/search-type/toggle")
+    public ApiResponse<List<ToggleCodeLabelDto>> getPurchaseOrderSearchTypeToggle() {
+        List<ToggleCodeLabelDto> list = List.of(
+                new ToggleCodeLabelDto("공급 업체명", "SupplierCompanyNumber"),
+                new ToggleCodeLabelDto("발주서 번호", "PurchaseOrderNumber")
+        );
+        return ApiResponse.success(list, "카테고리 목록 조회 성공", org.springframework.http.HttpStatus.OK);
     }
 
     @GetMapping("/supplier/status/toggle")
@@ -76,5 +95,14 @@ public class MMStatisticsController {
             new ToggleCodeLabelDto("기타", "ETC")
         );
     return ApiResponse.success(list, "카테고리 목록 조회 성공", org.springframework.http.HttpStatus.OK);
+    }
+
+    @GetMapping("/supplier/search-type/toggle")
+    public ApiResponse<List<ToggleCodeLabelDto>> getSupplierSearchTypeToggle() {
+        List<ToggleCodeLabelDto> list = List.of(
+                new ToggleCodeLabelDto("공급 업체명", "SupplierCompanyNumber"),
+                new ToggleCodeLabelDto("공급 업체 번호", "SupplierCompanyName")
+        );
+        return ApiResponse.success(list, "카테고리 목록 조회 성공", org.springframework.http.HttpStatus.OK);
     }
 }
