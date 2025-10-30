@@ -16,7 +16,6 @@ jobs:
       checks: write
       pull-requests: write
       issues: write
-      checks: write
 
 
     steps:

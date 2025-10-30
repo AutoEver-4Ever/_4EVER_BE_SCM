@@ -46,13 +46,17 @@ public class SupplierCompany extends TimeStamp {
     @Column(name = "office_phone")
     private String officePhone;
 
-    @Column(name = "delivery_days")
-    private Integer deliveryDays;
+@Column(name = "delivery_days")
+private Integer deliveryDays;
 
-    @PrePersist
-    public void prePersist() {
-        if (id == null) {
-            id = String.valueOf(UuidCreator.getTimeOrderedEpoch());  // UUID v7 생성
-        }
+@PrePersist
+public void prePersist() {
+    if (id == null) {
+        id = String.valueOf(UuidCreator.getTimeOrderedEpoch());  // UUID v7 생성
+    }
+}
+
+    public void assignSupplierUser(SupplierUser supplierUser) {
+        this.supplierUser = supplierUser;
     }
 }

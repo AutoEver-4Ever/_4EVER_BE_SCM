@@ -66,4 +66,10 @@ public class GenericAsyncResultManager<T> implements AsyncResultManager<T> {
             log.warn("트랜잭션 {}에 대한 DeferredResult를 찾을 수 없거나 이미 완료됨", transactionId);
         }
     }
+
+    @Override
+    public boolean hasPendingResult(String transactionId) {
+        DeferredResult<ResponseEntity<ApiResponse<T>>> result = pendingResults.get(transactionId);
+        return result != null && !result.isSetOrExpired();
+    }
 }
