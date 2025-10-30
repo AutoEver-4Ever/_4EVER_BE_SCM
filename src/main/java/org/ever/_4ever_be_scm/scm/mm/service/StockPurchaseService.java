@@ -7,5 +7,5 @@ public interface StockPurchaseService {
     /**
      * 재고성 구매요청 생성
      */
-    String createStockPurchaseRequest(StockPurchaseRequestDto requestDto);
+    String createStockPurchaseRequest(StockPurchaseRequestDto requestDto, String requesterId);
 }

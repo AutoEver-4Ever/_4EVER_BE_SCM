@@ -29,7 +29,7 @@ public class StockPurchaseServiceImpl implements StockPurchaseService {
     private final ProductRequestItemRepository productRequestItemRepository;
 
     @Override
-    public String createStockPurchaseRequest(StockPurchaseRequestDto requestDto) {
+    public String createStockPurchaseRequest(StockPurchaseRequestDto requestDto, String requesterId) {
     if (requestDto.getItems() == null || requestDto.getItems().isEmpty()) {
         throw new IllegalArgumentException("요청할 제품 목록이 없습니다.");
     }
@@ -46,7 +46,7 @@ public class StockPurchaseServiceImpl implements StockPurchaseService {
     ProductRequest productRequest = ProductRequest.builder()
         .productRequestCode(prCode)
         .productRequestType("STOCK")
-        .requesterId(requestDto.getRequesterId())
+        .requesterId(requesterId)
         .approvalId(approval)
         .build();
     productRequestRepository.save(productRequest);

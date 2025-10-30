@@ -65,9 +65,12 @@ public class PurchaseOrderController {
      * 발주서 승인
      */
     @PostMapping("/{purchaseOrderId}/approve")
-    public ResponseEntity<ApiResponse<Void>> approvePurchaseOrder(@PathVariable String purchaseOrderId) {
+    public ResponseEntity<ApiResponse<Void>> approvePurchaseOrder(
+            @PathVariable String purchaseOrderId,
+            @RequestParam String requesterId
+            ) {
         try {
-            purchaseOrderService.approvePurchaseOrder(purchaseOrderId);
+            purchaseOrderService.approvePurchaseOrder(purchaseOrderId, requesterId);
             return ResponseEntity.ok(ApiResponse.success(null, "발주서 승인이 완료되었습니다.", HttpStatus.OK));
         } catch (Exception e) {
             return ResponseEntity.badRequest()
@@ -81,9 +84,10 @@ public class PurchaseOrderController {
     @PostMapping("/{purchaseOrderId}/reject")
     public ResponseEntity<ApiResponse<Void>> rejectPurchaseOrder(
             @PathVariable String purchaseOrderId,
+            @RequestParam String requesterId,
             @RequestBody PurchaseOrderRejectRequestDto requestDto) {
         try {
-            purchaseOrderService.rejectPurchaseOrder(purchaseOrderId, requestDto.getReason());
+            purchaseOrderService.rejectPurchaseOrder(purchaseOrderId, requesterId ,requestDto.getReason());
             return ResponseEntity.ok(ApiResponse.success(null, "발주서 반려가 완료되었습니다.", HttpStatus.OK));
         } catch (Exception e) {
             return ResponseEntity.badRequest()

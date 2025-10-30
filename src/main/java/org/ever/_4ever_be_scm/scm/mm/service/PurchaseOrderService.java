@@ -13,10 +13,10 @@ public interface PurchaseOrderService {
     /**
      * 발주서 승인
      */
-    void approvePurchaseOrder(String purchaseOrderId);
+    void approvePurchaseOrder(String purchaseOrderId, String requesterId);
     
     /**
      * 발주서 반려
      */
-    void rejectPurchaseOrder(String purchaseOrderId, String reason);
+    void rejectPurchaseOrder(String purchaseOrderId,String requesterId, String reason);
 }

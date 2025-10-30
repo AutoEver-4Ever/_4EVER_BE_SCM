@@ -62,12 +62,14 @@ public class PurchaseRequisitionController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<Void>> createPurchaseRequisition(
-            @RequestBody PurchaseRequisitionCreateRequestDto requestDto) {
+            @RequestBody PurchaseRequisitionCreateRequestDto requestDto,
+            @RequestParam String requesterId
+            ) {
         
         // DTO to VO 변환
         PurchaseRequisitionCreateVo createVo = PurchaseRequisitionCreateVo.builder()
-                .requesterId(requestDto.getRequesterId())
-                .requesterId(requestDto.getRequesterId())
+                .requesterId(requesterId)
+                .requesterId(requesterId)
                 .items(requestDto.getItems().stream()
                         .map(item -> PurchaseRequisitionCreateVo.ItemVo.builder()
                                 .itemName(item.getItemName())
@@ -89,9 +91,11 @@ public class PurchaseRequisitionController {
 
     @PostMapping("/{purchaseRequisitionId}/approve")
     public ResponseEntity<ApiResponse<Void>> approvePurchaseRequisition(
-            @PathVariable String purchaseRequisitionId) {
+            @PathVariable String purchaseRequisitionId,
+            @RequestParam String requesterId
+    ) {
         
-        purchaseRequisitionService.approvePurchaseRequisition(purchaseRequisitionId);
+        purchaseRequisitionService.approvePurchaseRequisition(purchaseRequisitionId,requesterId);
         
         return ResponseEntity.ok(ApiResponse.success(null, "구매요청서가 승인되었습니다.", HttpStatus.OK));
     }
@@ -99,9 +103,10 @@ public class PurchaseRequisitionController {
     @PostMapping("/{purchaseRequisitionId}/reject")
     public ResponseEntity<ApiResponse<Void>> rejectPurchaseRequisition(
             @PathVariable String purchaseRequisitionId,
+            @RequestParam String requesterId,
             @RequestBody PurchaseRequisitionRejectRequestDto requestDto) {
         
-        purchaseRequisitionService.rejectPurchaseRequisition(purchaseRequisitionId, requestDto);
+        purchaseRequisitionService.rejectPurchaseRequisition(purchaseRequisitionId, requestDto, requesterId);
         
         return ResponseEntity.ok(ApiResponse.success(null, "구매요청서가 반려되었습니다.", HttpStatus.OK));
     }

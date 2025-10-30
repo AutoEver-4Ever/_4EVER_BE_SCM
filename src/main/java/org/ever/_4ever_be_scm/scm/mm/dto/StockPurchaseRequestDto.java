@@ -7,7 +7,6 @@ import java.util.List;
 
 @Data
 public class StockPurchaseRequestDto {
-    private String requesterId; // 요청자 ID (optional, 시스템에서 지정 가능)
     private List<Item> items;
 
     @Data

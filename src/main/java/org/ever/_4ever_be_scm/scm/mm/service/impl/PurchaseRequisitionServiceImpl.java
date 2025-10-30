@@ -7,6 +7,8 @@ import org.ever._4ever_be_scm.scm.iv.repository.ProductRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.SupplierCompanyRepository;
 import org.ever._4ever_be_scm.scm.mm.dto.*;
 import org.ever._4ever_be_scm.scm.mm.entity.*;
+import org.ever._4ever_be_scm.scm.mm.integration.dto.InternalUserResponseDto;
+import org.ever._4ever_be_scm.scm.mm.integration.port.InternalUserServicePort;
 import org.ever._4ever_be_scm.scm.mm.repository.*;
 import org.ever._4ever_be_scm.scm.mm.service.PurchaseRequisitionService;
 import org.ever._4ever_be_scm.scm.mm.vo.PurchaseRequisitionCreateVo;
@@ -36,6 +38,7 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
     private final ProductOrderApprovalRepository productOrderApprovalRepository;
     private final ProductRepository productRepository;
     private final SupplierCompanyRepository supplierCompanyRepository;
+    private final InternalUserServicePort internalUserServicePort;
 
     @Override
     @Transactional
@@ -133,6 +136,8 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
         
         List<ProductRequestItem> items = productRequestItemRepository.findByProductRequestId(purchaseRequisitionId);
 
+        InternalUserResponseDto userInfo = internalUserServicePort.getInternalUserInfoById(productRequest.getRequesterId());
+
         String statusCode = productRequest.getApprovalId().getApprovalStatus();
 
         List<PurchaseRequisitionDetailResponseDto.ItemDto> itemDtos = new ArrayList<>();
@@ -153,9 +158,9 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
                 .id(productRequest.getId())
                 .purchaseRequisitionNumber(productRequest.getProductRequestCode())
                 .requesterId(productRequest.getRequesterId())
-                .requesterName("김철수") // Mock 데이터
-                .departmentId("77") // Mock 데이터
-                .departmentName("생산팀") // Mock 데이터
+                .requesterName(userInfo.getUserName())
+                .departmentId(userInfo.getDepartmentId()) // Mock 데이터
+                .departmentName(userInfo.getDepartmentName())
                 .requestDate(productRequest.getCreatedAt())
                 .statusCode(statusCode)
                 .items(itemDtos)
@@ -232,7 +237,7 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
 
     @Override
     @Transactional
-    public void approvePurchaseRequisition(String purchaseRequisitionId) {
+    public void approvePurchaseRequisition(String purchaseRequisitionId,String requesterId) {
         ProductRequest productRequest = productRequestRepository.findById(purchaseRequisitionId)
                 .orElseThrow(() -> new IllegalArgumentException("구매요청서를 찾을 수 없습니다."));
         
@@ -242,7 +247,7 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
         ProductRequestApproval updatedApproval = approval.toBuilder()
                 .approvalStatus("APPROVAL")
                 .approvedAt(LocalDateTime.now())
-                .approvedBy("system")
+                .approvedBy(requesterId)
                 .build();
 
         productRequestApprovalRepository.save(updatedApproval);
@@ -253,7 +258,7 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
 
     @Override
     @Transactional
-    public void rejectPurchaseRequisition(String purchaseRequisitionId, PurchaseRequisitionRejectRequestDto requestDto) {
+    public void rejectPurchaseRequisition(String purchaseRequisitionId, PurchaseRequisitionRejectRequestDto requestDto, String requesterId) {
         ProductRequest productRequest = productRequestRepository.findById(purchaseRequisitionId)
                 .orElseThrow(() -> new IllegalArgumentException("구매요청서를 찾을 수 없습니다."));
 
@@ -264,7 +269,7 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
                 .approvalStatus("REJECTED")
                 .rejectedReason(requestDto.getComment())
                 .approvedAt(LocalDateTime.now())
-                .approvedBy("system")
+                .approvedBy(requesterId)
                 .build();
 
         productRequestApprovalRepository.save(updatedApproval);
