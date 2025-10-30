@@ -53,7 +53,7 @@ public class SupplierController {
         return ResponseEntity.ok(ApiResponse.success(detail, "공급업체 상세 정보를 조회했습니다.", HttpStatus.OK));
     }
 
-    @PostMapping("/supplier")
+    @PostMapping()
     public DeferredResult<ResponseEntity<ApiResponse<CreateAuthUserResultEvent>>> createSupplier(
         @RequestBody SupplierCreateRequestDto requestDto
     ) {
