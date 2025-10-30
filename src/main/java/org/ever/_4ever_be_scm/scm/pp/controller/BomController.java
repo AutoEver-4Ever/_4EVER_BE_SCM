@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "생산관리", description = "생산 관리 API")
 @RestController
-@RequestMapping("/api/scm-pp/pp/boms")
+@RequestMapping("/scm-pp/pp/boms")
 @RequiredArgsConstructor
 public class BomController {
     private final BomService bomService;

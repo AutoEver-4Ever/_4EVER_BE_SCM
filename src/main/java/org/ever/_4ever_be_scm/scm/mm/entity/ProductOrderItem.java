@@ -11,7 +11,6 @@ import java.util.UUID;
 @Entity
 @Table(name = "product_order_item")
 @Getter
-@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

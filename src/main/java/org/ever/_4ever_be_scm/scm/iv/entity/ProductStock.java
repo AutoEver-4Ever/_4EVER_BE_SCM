@@ -33,9 +33,6 @@ public class ProductStock extends TimeStamp {
     @Column(name = "status")
     private String status;
 
-    @Column(name = "total_count")
-    private BigDecimal totalCount;
-
     @Column(name = "available_count")
     private BigDecimal availableCount;
 

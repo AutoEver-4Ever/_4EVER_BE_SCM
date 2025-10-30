@@ -10,17 +10,14 @@ import org.ever._4ever_be_scm.scm.iv.dto.ShortageItemDto;
 import org.ever._4ever_be_scm.scm.iv.dto.ShortageItemPreviewDto;
 import org.ever._4ever_be_scm.scm.iv.dto.StockMovementDto;
 import org.ever._4ever_be_scm.scm.iv.dto.request.AddInventoryItemRequest;
+import org.ever._4ever_be_scm.scm.iv.dto.response.ItemToggleResponseDto;
 import org.ever._4ever_be_scm.scm.iv.entity.*;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductStockLogRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductStockRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.WarehouseRepository;
-import org.ever._4ever_be_scm.scm.iv.repository.SupplierUserRepository;
-import org.ever._4ever_be_scm.scm.iv.repository.*;
 import org.ever._4ever_be_scm.scm.iv.service.InventoryService;
-import org.ever._4ever_be_scm.scm.iv.vo.InventoryFilterVo;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -104,12 +101,12 @@ public class InventoryServiceImpl implements InventoryService {
                 .itemId(product.getId())
                 .itemName(product.getProductName())
                 .itemNumber(product.getProductCode())
-                .category(product.getCategory())
+                .category(mapCategory(product.getCategory()))
                 // 재고 정보
-                .currentStock(productStock.getTotalCount().intValue())
+                .currentStock(productStock.getAvailableCount().intValue())
                 .uomName(product.getUnit())
                 .unitPrice(product.getOriginPrice())
-                .totalAmount(productStock.getTotalCount().multiply(product.getOriginPrice()))
+                .totalAmount(productStock.getAvailableCount().multiply(product.getOriginPrice()))
                 .safetyStock(productStock.getSafetyCount().intValue())
                 .statusCode(productStock.getStatus())
                 // 위치 정보
@@ -136,7 +133,7 @@ public class InventoryServiceImpl implements InventoryService {
     public Page<ShortageItemDto> getShortageItems(String status, Pageable pageable) {
         Page<ProductStock> shortageItems;
         
-        if (status != null && !status.isEmpty()) {
+        if (!status.equals("ALL")) {
             shortageItems = productStockRepository.findShortageItems(status, pageable);
         } else {
             shortageItems = productStockRepository.findAllShortageItems(pageable);
@@ -165,20 +162,20 @@ public class InventoryServiceImpl implements InventoryService {
         Product product = productStock.getProduct();
         Warehouse warehouse = productStock.getWarehouse();
 
-        BigDecimal totalPrice = productStock.getTotalCount().multiply(product.getOriginPrice());
+        BigDecimal totalPrice = productStock.getAvailableCount().multiply(product.getOriginPrice());
 
         return InventoryItemDto.builder()
                 .itemId(product.getId())
                 .itemNumber(product.getProductCode())
                 .itemName(product.getProductName())
-                .category(product.getCategory())
-                .currentStock(productStock.getTotalCount().intValue())
+                .category(mapCategory(product.getCategory()))
+                .currentStock(productStock.getAvailableCount().intValue())
                 .safetyStock(productStock.getSafetyCount().intValue())
                 .uomName(product.getUnit())
                 .unitPrice(product.getOriginPrice())
                 .totalAmount(totalPrice)
                 .warehouseName(warehouse.getWarehouseName())
-                .warehouseType(warehouse.getWarehouseType())
+                .warehouseType(mapCategory(warehouse.getWarehouseType()))
                 .statusCode(productStock.getStatus())
                 .build();
     }
@@ -221,9 +218,9 @@ public class InventoryServiceImpl implements InventoryService {
         Product product = productStock.getProduct();
         Warehouse warehouse = productStock.getWarehouse();
         
-        int currentStock = productStock.getTotalCount().intValue();
+        int currentStock = productStock.getAvailableCount().intValue();
         int safetyStock = productStock.getSafetyCount().intValue();
-        BigDecimal totalPrice = productStock.getTotalCount().multiply(product.getOriginPrice());
+        BigDecimal totalPrice = productStock.getAvailableCount().multiply(product.getOriginPrice());
         
         return ShortageItemDto.builder()
                 .itemId(product.getId())
@@ -237,7 +234,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .unitPrice(product.getOriginPrice())
                 .totalAmount(totalPrice)
                 .uomName(product.getUnit())
-                .status(productStock.getStatus())
+                .statusCode(productStock.getStatus())
                 .build();
     }
     
@@ -247,7 +244,7 @@ public class InventoryServiceImpl implements InventoryService {
     private ShortageItemPreviewDto mapToShortageItemPreviewDto(ProductStock productStock) {
         Product product = productStock.getProduct();
         
-        int currentStock = productStock.getTotalCount().intValue();
+        int currentStock = productStock.getAvailableCount().intValue();
         int safetyStock = productStock.getSafetyCount().intValue();
         
         return ShortageItemPreviewDto.builder()
@@ -283,7 +280,6 @@ public class InventoryServiceImpl implements InventoryService {
         ProductStock productStock = ProductStock.builder()
                 .product(product)
                 .warehouse(warehouse)
-                .totalCount(BigDecimal.valueOf(request.getCurrentStock()))
                 .availableCount(BigDecimal.valueOf(request.getCurrentStock()))
                 .safetyCount(BigDecimal.valueOf(request.getSafetyStock()))
                 .status(calculateStatus(request.getCurrentStock(), request.getSafetyStock()))
@@ -308,7 +304,7 @@ public class InventoryServiceImpl implements InventoryService {
         for (ProductStock productStock : productStocks) {
             productStock.setSafetyCount(BigDecimal.valueOf(safetyStock));
             // 상태 재계산
-            productStock.setStatus(calculateStatus(productStock.getTotalCount().intValue(), safetyStock));
+            productStock.setStatus(calculateStatus(productStock.getAvailableCount().intValue(), safetyStock));
             productStockRepository.save(productStock);
         }
     }
@@ -316,7 +312,7 @@ public class InventoryServiceImpl implements InventoryService {
     /**
      * 재고 상태 계산
      */
-    private String calculateStatus(Integer currentStock, Integer safetyStock) {
+    private  String calculateStatus(Integer currentStock, Integer safetyStock) {
         if (currentStock == null || safetyStock == null || safetyStock == 0) {
             return "NORMAL";
         }
@@ -331,4 +327,54 @@ public class InventoryServiceImpl implements InventoryService {
             return "URGENT";  // 안전재고의 70% 미만
         }
     }
+    
+    /**
+     * 자재 품목 토글 목록 조회
+     * product 엔티티에는 존재하지만 productStock 엔티티에는 존재하지 않는 product 조회
+     * 
+     * @return 재고에 존재하지 않는 자재 품목 목록
+     */
+    @Override
+    public List<ItemToggleResponseDto> getItemToggleList() {
+        // ProductStock에 존재하지 않는 Product 목록 조회
+        List<Product> productsNotInStock = productRepository.findProductsNotInStock();
+        
+        return productsNotInStock.stream()
+                .map(this::mapToItemToggleResponseDto)
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * Product 엔티티를 ItemToggleResponseDto로 변환
+     */
+    private ItemToggleResponseDto mapToItemToggleResponseDto(Product product) {
+        SupplierCompany supplierCompany = product.getSupplierCompany();
+        
+        return ItemToggleResponseDto.builder()
+                .supplierCompanyName(supplierCompany != null ? supplierCompany.getCompanyName() : "미지정")
+                .uomName(product.getUnit())
+                .supplierCompanyId(supplierCompany != null ? supplierCompany.getId() : "")
+                .itemName(product.getProductName())
+                .itemId(product.getId())
+                .unitPrice(product.getOriginPrice())
+                .build();
+    }
+
+    /**
+     * 타입 or 카테고리 변환
+     */
+    private String mapCategory(String category) {
+        if (category == null) return "기타";
+
+        switch (category) {
+            case "ITEM":
+                return "부품";
+            case "MATERIAL":
+                return "원자재";
+            case "ETC":
+            default:
+                return "기타";
+        }
+    }
+
 }

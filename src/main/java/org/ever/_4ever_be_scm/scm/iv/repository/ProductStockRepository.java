@@ -30,18 +30,14 @@ public interface ProductStockRepository extends JpaRepository<ProductStock, Stri
     @Query("SELECT ps FROM ProductStock ps " +
            "JOIN FETCH ps.product p " +
            "JOIN FETCH ps.warehouse w " +
-           "WHERE ps.totalCount < ps.safetyCount " +
-           "AND (:status IS NULL OR ps.status = :status)")
+           "WHERE (:status IS NULL OR ps.status = :status)")
     Page<ProductStock> findShortageItems(@Param("status") String status, Pageable pageable);
 
     @Query("SELECT ps FROM ProductStock ps " +
            "JOIN FETCH ps.product p " +
            "JOIN FETCH ps.warehouse w " +
-           "WHERE ps.totalCount < ps.safetyCount")
+           "WHERE ps.availableCount < ps.safetyCount")
     Page<ProductStock> findAllShortageItems(Pageable pageable);
-
-    @Query("SELECT COUNT(ps) FROM ProductStock ps WHERE ps.totalCount < ps.safetyCount AND ps.status = :status")
-    long countShortageItemsByStatus(@Param("status") String status);
     
     @Query("SELECT ps FROM ProductStock ps WHERE ps.product.id = :productId")
     List<ProductStock> findByListProductId(@Param("productId") String productId);
@@ -63,4 +59,32 @@ public interface ProductStockRepository extends JpaRepository<ProductStock, Stri
             Pageable pageable);
 
     Optional<Object> findByProductIdAndWarehouseId(String itemId, String warehouseId);
+    
+    /**
+     * 상태별 ProductStock 개수 조회
+     * 
+     * @param status 상태
+     * @return 해당 상태의 ProductStock 개수
+     */
+    long countByStatus(String status);
+    
+    /**
+     * 날짜 범위와 상태별 ProductStock 개수 조회
+     * 
+     * @param status 상태
+     * @param startDate 시작일
+     * @param endDate 종료일
+     * @return 해당 조건의 ProductStock 개수
+     */
+    long countByStatusAndUpdatedAtBetween(String status, java.time.LocalDateTime startDate, java.time.LocalDateTime endDate);
+    
+    /**
+     * 날짜 범위 내 총 재고 가치 계산
+     * 
+     * @param startDate 시작일
+     * @param endDate 종료일
+     * @return 총 재고 가치
+     */
+    @Query("SELECT SUM(ps.availableCount * p.originPrice) FROM ProductStock ps JOIN ps.product p WHERE ps.createdAt BETWEEN :startDate AND :endDate")
+    java.util.Optional<java.math.BigDecimal> sumTotalStockValueByDateBetween(@Param("startDate") java.time.LocalDateTime startDate, @Param("endDate") java.time.LocalDateTime endDate);
 }

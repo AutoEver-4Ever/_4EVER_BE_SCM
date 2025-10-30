@@ -27,7 +27,6 @@ import java.util.UUID;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@Profile({"dev", "local"})
 public class MockDataInitializer {
 
     // IV 도메인 Repository
@@ -131,7 +130,7 @@ public class MockDataInitializer {
                     .warehouseType(i % 2 == 1 ? "ITEM" : "MATERIAL")
                     .status("ACTIVE")
                     .internalUserId("internalUser-" + i)
-                    .address("경기도 천안시"+i)
+                    .location("경기도 천안시"+i)
                     .build();
             warehouses.add(warehouse);
         }
@@ -159,7 +158,6 @@ public class MockDataInitializer {
             ProductStock stock = ProductStock.builder()
                     .product(products.get(i))
                     .warehouse(warehouses.get(i))
-                    .totalCount(BigDecimal.valueOf(100 + i * 20))
                     .availableCount(BigDecimal.valueOf(80 + i * 15))
                     .safetyCount(BigDecimal.valueOf(50))
                     .status("NORMAL")
@@ -259,7 +257,7 @@ public class MockDataInitializer {
             ProductRequestApproval approval = ProductRequestApproval.builder()
                     .approvalStatus(i % 2 == 1 ? "APPROVED" : "PENDING")
                     .approvedBy(String.valueOf(4000 + i))
-                    .approvedAt(LocalDate.now().minusDays(i))
+                    .approvedAt(LocalDateTime.now().minusDays(i))
                     .rejectedReason(i % 2 == 0 ? "추가 검토 필요" : null)
                     .build();
             requestApprovals.add(approval);

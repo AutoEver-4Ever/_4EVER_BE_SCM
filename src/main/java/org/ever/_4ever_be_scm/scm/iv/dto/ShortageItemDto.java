@@ -65,5 +65,5 @@ public class ShortageItemDto {
     /**
      * 상태 (주의, 위험)
      */
-    private String status;
+    private String statusCode;
 }

@@ -10,6 +10,7 @@ import org.ever._4ever_be_scm.scm.mm.dto.PurchaseOrderListResponseDto;
 import org.ever._4ever_be_scm.scm.mm.entity.ProductOrder;
 import org.ever._4ever_be_scm.scm.mm.entity.ProductOrderApproval;
 import org.ever._4ever_be_scm.scm.mm.entity.ProductOrderItem;
+import org.ever._4ever_be_scm.scm.mm.entity.ProductRequestApproval;
 import org.ever._4ever_be_scm.scm.mm.repository.ProductOrderApprovalRepository;
 import org.ever._4ever_be_scm.scm.mm.repository.ProductOrderItemRepository;
 import org.ever._4ever_be_scm.scm.mm.repository.ProductOrderRepository;
@@ -21,6 +22,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -226,11 +228,14 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         if (approval == null) {
             throw new RuntimeException("승인 정보가 없습니다.");
         }
-        
-        approval.setApprovalStatus("APPROVAL");
-        approval.setApprovedBy("1");
-        approval.setApprovedAt(LocalDateTime.now());
-        productOrderApprovalRepository.save(approval);
+
+        ProductOrderApproval updatedApproval = approval.toBuilder()
+                .approvalStatus("APPROVAL")
+                .approvedAt(LocalDateTime.now())
+                .approvedBy("system")
+                .build();
+
+        productOrderApprovalRepository.save(updatedApproval);
     }
 
     @Override
@@ -243,11 +248,15 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         if (approval == null) {
             throw new RuntimeException("승인 정보가 없습니다.");
         }
-        
-        approval.setApprovalStatus("REJECTED");
-        approval.setApprovedBy("1");
-        approval.setRejectedReason(reason);
-        approval.setApprovedAt(LocalDateTime.now());
-        productOrderApprovalRepository.save(approval);
+
+
+        ProductOrderApproval updatedApproval = approval.toBuilder()
+                .approvalStatus("REJECTED")
+                .approvedAt(LocalDateTime.now())
+                .rejectedReason(reason)
+                .approvedBy("system")
+                .build();
+
+        productOrderApprovalRepository.save(updatedApproval);
     }
 }

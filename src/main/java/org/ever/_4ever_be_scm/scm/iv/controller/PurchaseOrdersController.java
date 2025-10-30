@@ -12,37 +12,69 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
+
 /**
  * 구매 발주 관리 컨트롤러
  */
 @Tag(name = "재고관리", description = "재고 관리 API")
 @RestController
-@RequestMapping("/api/scm-pp/iv")
+@RequestMapping("/scm-pp")
 @RequiredArgsConstructor
 public class PurchaseOrdersController {
     
     private final PurchaseOrdersService purchaseOrderService;
     
     /**
-     * 입고 대기/완료 목록 조회 API
+     * 입고 준비 목록 조회 API
      * 
-     * @param status 상태 (입고 대기, 입고 완료)
      * @param page 페이지 번호 (0부터 시작)
      * @param size 페이지 크기
-     * @return 입고 대기/완료 목록
+     * @return 입고 준비 목록
      */
-    @GetMapping("/purchase-orders")
-    public ResponseEntity<ApiResponse<PagedResponseDto<PurchaseOrderDto>>> getPurchaseOrders(
-            @RequestParam(required = false, defaultValue = "입고 대기") String status,
+    @GetMapping("/purchase-orders/receiving")
+    @io.swagger.v3.oas.annotations.Operation(
+            summary = "입고 준비 목록 조회"
+    )
+    public ResponseEntity<ApiResponse<PagedResponseDto<PurchaseOrderDto>>> getReceivingPurchaseOrders(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         
-        // 서비스 호출
-        Page<PurchaseOrderDto> purchaseOrdersPage = purchaseOrderService.getPurchaseOrdersByStatus(status, PageRequest.of(page, size));
+        // 서비스 호출 - RECEIVING 상태만 조회
+        Page<PurchaseOrderDto> purchaseOrdersPage = purchaseOrderService.getReceivingPurchaseOrders(PageRequest.of(page, size));
         PagedResponseDto<PurchaseOrderDto> response = PagedResponseDto.from(purchaseOrdersPage);
         
-        String message = status.equals("입고 완료") ? "입고 완료 목록을 조회했습니다." : "입고 대기 목록을 조회했습니다.";
+        return ResponseEntity.ok(ApiResponse.success(response, "입고 준비 목록을 조회했습니다.", HttpStatus.OK));
+    }
+    
+    /**
+     * 입고 완료 목록 조회 API
+     * 
+     * @param page 페이지 번호 (0부터 시작)
+     * @param size 페이지 크기
+     * @param startDate 시작일 (yyyy-MM-dd)
+     * @param endDate 종료일 (yyyy-MM-dd)
+     * @return 입고 완료 목록
+     */
+    @GetMapping("/purchase-orders/received")
+    @io.swagger.v3.oas.annotations.Operation(
+            summary = "입고 완료 목록 조회"
+    )
+    public ResponseEntity<ApiResponse<PagedResponseDto<PurchaseOrderDto>>> getReceivedPurchaseOrders(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
         
-        return ResponseEntity.ok(ApiResponse.success(response, message, HttpStatus.OK));
+        // 날짜 파라미터 변환
+        LocalDate start = startDate != null ? LocalDate.parse(startDate) : null;
+        LocalDate end = endDate != null ? LocalDate.parse(endDate) : null;
+        
+        // 서비스 호출 - RECEIVED 상태만 조회, dueDate 기준 필터링
+        Page<PurchaseOrderDto> purchaseOrdersPage = purchaseOrderService.getReceivedPurchaseOrders(
+                PageRequest.of(page, size), start, end);
+        PagedResponseDto<PurchaseOrderDto> response = PagedResponseDto.from(purchaseOrdersPage);
+        
+        return ResponseEntity.ok(ApiResponse.success(response, "입고 완료 목록을 조회했습니다.", HttpStatus.OK));
     }
 }

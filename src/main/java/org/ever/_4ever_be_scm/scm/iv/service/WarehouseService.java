@@ -1,7 +1,6 @@
 package org.ever._4ever_be_scm.scm.iv.service;
 
-import org.ever._4ever_be_scm.scm.iv.dto.WarehouseDto;
-import org.ever._4ever_be_scm.scm.iv.dto.WarehouseDetailDto;
+import org.ever._4ever_be_scm.scm.iv.dto.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -24,4 +23,27 @@ public interface WarehouseService {
      * @return 창고 상세 정보
      */
     WarehouseDetailDto getWarehouseDetail(String warehouseId);
+    
+    /**
+     * 창고 생성
+     * 
+     * @param request 창고 생성 요청 정보
+     */
+    void createWarehouse(WarehouseCreateRequestDto request);
+    
+    /**
+     * 창고 정보 수정
+     * 
+     * @param warehouseId 창고 ID
+     * @param request 창고 수정 요청 정보
+     */
+    void updateWarehouse(String warehouseId, WarehouseUpdateRequestDto request);
+    
+    /**
+     * 창고 드롭다운 목록 조회
+     * 
+     * @param excludeWarehouseId 제외할 창고 ID (선택사항)
+     * @return 창고 드롭다운 목록
+     */
+    WarehouseDropdownResponseDto getWarehouseDropdown(String excludeWarehouseId);
 }

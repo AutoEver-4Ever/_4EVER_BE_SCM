@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
 
 @Tag(name = "구매관리", description = "구매 관리 API")
 @RestController
-@RequestMapping("/api/scm-pp/mm/purchase-requisitions")
+@RequestMapping("/scm-pp/mm/purchase-requisitions")
 @RequiredArgsConstructor
 public class PurchaseRequisitionController {
     

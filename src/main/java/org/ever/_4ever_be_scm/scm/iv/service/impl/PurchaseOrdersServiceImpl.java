@@ -12,9 +12,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Arrays;
+import java.time.LocalDate;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.ever._4ever_be_scm.common.exception.ErrorCode.INVALID_STATUS;
@@ -28,22 +27,54 @@ import static org.ever._4ever_be_scm.common.exception.ErrorCode.INVALID_STATUS;
 public class PurchaseOrdersServiceImpl implements PurchaseOrdersService {
     private final ProductOrderRepository productOrderRepository;
     /**
-     * 입고 상태별 발주 목록 조회
-     *
-     * @param status   상태 (입고 대기: RECEIVING / 입고 완료: RECEIVED)
+     * 입고 준비 목록 조회 (RECEIVING 상태)
+     * 
      * @param pageable 페이징 정보
-     * @return 상태별 발주 목록 (Page 형태)
+     * @return 입고 준비 발주 목록
      */
     @Override
-    public Page<PurchaseOrderDto> getPurchaseOrdersByStatus(String status, Pageable pageable) {
+    public Page<PurchaseOrderDto> getReceivingPurchaseOrders(Pageable pageable) {
+        // DB 조회 (페이징) - RECEIVING 상태만
+        Page<ProductOrder> productOrders = productOrderRepository.findByApprovalId_ApprovalStatus("RECEIVING", pageable);
 
-        // 상태 값 검증
-        if (status == null || (!status.equalsIgnoreCase("RECEIVING") && !status.equalsIgnoreCase("RECEIVED"))) {
-            throw new BusinessException(INVALID_STATUS);
+        // DTO 변환
+        List<PurchaseOrderDto> purchaseOrderDtos = productOrders.getContent().stream()
+                .map(po -> PurchaseOrderDto.builder()
+                        .purchaseOrderId(po.getId())
+                        .purchaseOrderNumber(po.getProductOrderCode())
+                        .supplierCompanyName(po.getSupplierCompanyName())
+                        .orderDate(po.getCreatedAt())
+                        .dueDate(po.getDueDate())
+                        .totalAmount(po.getTotalPrice())
+                        .statusCode(po.getApprovalId().getApprovalStatus())
+                        .build())
+                .collect(Collectors.toList());
+
+        // Page 객체로 감싸서 반환
+        return new PageImpl<>(purchaseOrderDtos, pageable, productOrders.getTotalElements());
+    }
+    
+    /**
+     * 입고 완료 목록 조회 (RECEIVED 상태) - 날짜 필터링 포함
+     * 
+     * @param pageable 페이징 정보
+     * @param startDate 시작일 (선택사항)
+     * @param endDate 종료일 (선택사항)
+     * @return 입고 완료 발주 목록
+     */
+    @Override
+    public Page<PurchaseOrderDto> getReceivedPurchaseOrders(Pageable pageable, LocalDate startDate, LocalDate endDate) {
+        Page<ProductOrder> productOrders;
+        
+        // 날짜 필터링 조건에 따라 다른 쿼리 실행
+        if (startDate != null && endDate != null) {
+            // 시작일과 종료일이 모두 있는 경우 - dueDate 기준 필터링
+            productOrders = productOrderRepository.findByApprovalId_ApprovalStatusAndDueDateBetween(
+                    "RECEIVED", startDate, endDate, pageable);
+        } else {
+            // 날짜 필터가 없는 경우 - RECEIVED 상태만 조회
+            productOrders = productOrderRepository.findByApprovalId_ApprovalStatus("RECEIVED", pageable);
         }
-
-        // DB 조회 (페이징)
-        Page<ProductOrder> productOrders = productOrderRepository.findByApprovalId_ApprovalStatus(status.toUpperCase(), pageable);
 
         // DTO 변환
         List<PurchaseOrderDto> purchaseOrderDtos = productOrders.getContent().stream()

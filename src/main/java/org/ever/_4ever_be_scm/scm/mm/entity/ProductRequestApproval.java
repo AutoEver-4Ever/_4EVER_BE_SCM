@@ -6,15 +6,15 @@ import jakarta.persistence.*;
 import org.ever._4ever_be_scm.common.entity.TimeStamp;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
 @Table(name = "product_request_approval")
 @Getter
-@Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@Builder(toBuilder = true)
 @EqualsAndHashCode(callSuper = false)
 public class ProductRequestApproval extends TimeStamp {
     @Id
@@ -28,7 +28,7 @@ public class ProductRequestApproval extends TimeStamp {
     private String approvedBy;
 
     @Column(name = "approved_at")
-    private LocalDate approvedAt;
+    private LocalDateTime approvedAt;
 
     @Column(name = "rejected_reason", length = 255)
     private String rejectedReason;

@@ -21,7 +21,7 @@ public class SwaggerConfig {
         return new OpenAPI()
                 .info(apiInfo())
                 .servers(List.of(
-                        new Server().url("http://localhost:" + serverPort).description("Local Server")
+                        new Server().url("http://localhost:" + serverPort+ "/scm").description("Local Server")
                 ));
     }
 

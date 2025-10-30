@@ -110,7 +110,7 @@ public class ExternalApiController {
     /**
      * 7. 카테고리가 ITEM인 Product 목록 반환
      */
-    @GetMapping("/product/item-category")
+    @GetMapping("/product/item/toggle")
     public ResponseEntity<ApiResponse<ProductMultipleResponseDto>> getItemCategoryProducts() {
         try {
             ProductMultipleResponseDto response = externalApiService.getItemCategoryProducts();
