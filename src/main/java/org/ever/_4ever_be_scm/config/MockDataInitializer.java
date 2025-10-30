@@ -90,24 +90,7 @@ public class MockDataInitializer {
     private void initializeIvDomain() {
         log.info("IV 도메인 목업 데이터 생성 시작");
 
-        // 1. SupplierCompany 생성
-        List<SupplierCompany> companies = new ArrayList<>();
-        for (int i = 1; i <= 5; i++) {
-            SupplierCompany company = SupplierCompany.builder()
-                    .companyCode("SUP" + String.format("%03d", i))
-                    .companyName("공급업체" + i)
-                    .category(i % 2 == 1 ? "ITEM" : "MATERIAL")
-                    .baseAddress("서울시 강남구")
-                    .detailAddress("테헤란로 " + (100 + i) + "길")
-                    .status("ACTIVE")
-                    .officePhone("02-1234-567" + i)
-                    .deliveryDays(3 + i)
-                    .build();
-            companies.add(company);
-        }
-        supplierCompanyRepository.saveAll(companies);
-
-        // 2. SupplierUser 생성
+        // 1. SupplierUser 생성
         List<SupplierUser> users = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
             SupplierUser user = SupplierUser.builder()
@@ -120,6 +103,24 @@ public class MockDataInitializer {
             users.add(user);
         }
         supplierUserRepository.saveAll(users);
+
+        // 2. SupplierCompany 생성
+        List<SupplierCompany> companies = new ArrayList<>();
+        for (int i = 1; i <= 5; i++) {
+            SupplierCompany company = SupplierCompany.builder()
+                    .supplierUser(users.get(i-1))
+                    .companyCode("SUP" + String.format("%03d", i))
+                    .companyName("공급업체" + i)
+                    .category(i % 2 == 1 ? "ITEM" : "MATERIAL")
+                    .baseAddress("서울시 강남구")
+                    .detailAddress("테헤란로 " + (100 + i) + "길")
+                    .status("ACTIVE")
+                    .officePhone("02-1234-567" + i)
+                    .deliveryDays(3 + i)
+                    .build();
+            companies.add(company);
+        }
+        supplierCompanyRepository.saveAll(companies);
 
         // 3. Warehouse 생성
         List<Warehouse> warehouses = new ArrayList<>();

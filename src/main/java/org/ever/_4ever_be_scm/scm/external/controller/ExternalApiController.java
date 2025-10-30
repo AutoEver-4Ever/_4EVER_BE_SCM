@@ -120,4 +120,21 @@ public class ExternalApiController {
                     .body(ApiResponse.fail("조회 실패: " + e.getMessage(), HttpStatus.BAD_REQUEST));
         }
     }
+
+    /**
+     * 8. supplierUserId로 supplierCompanyId return해줘
+     */
+
+    @PostMapping("/company/supplier")
+    public ResponseEntity<ApiResponse<SupplierCompanyIdDto>> getSupplierCompanyId(
+            @RequestBody SupplierUserIdDto request) {
+        try {
+            SupplierCompanyIdDto response = externalApiService.getSupplierCompanyId(request);
+            return ResponseEntity.ok(ApiResponse.success(response, "성공 메시지", HttpStatus.OK));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.fail("조회 실패: " + e.getMessage(), HttpStatus.BAD_REQUEST));
+        }
+    }
+
 }

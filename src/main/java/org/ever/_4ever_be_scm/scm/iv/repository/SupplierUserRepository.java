@@ -6,4 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface SupplierUserRepository extends JpaRepository<SupplierUser, String> {
     Optional<SupplierUser> findByUserId(String userId);
+
+    SupplierUser getByUserId(String userId);
 }

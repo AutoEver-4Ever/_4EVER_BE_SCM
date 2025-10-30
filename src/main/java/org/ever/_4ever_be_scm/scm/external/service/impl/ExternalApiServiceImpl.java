@@ -1,14 +1,18 @@
 package org.ever._4ever_be_scm.scm.external.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import org.ever._4ever_be_scm.common.exception.BusinessException;
+import org.ever._4ever_be_scm.common.exception.ErrorCode;
 import org.ever._4ever_be_scm.scm.external.dto.*;
 import org.ever._4ever_be_scm.scm.external.service.ExternalApiService;
 import org.ever._4ever_be_scm.scm.iv.entity.Product;
 import org.ever._4ever_be_scm.scm.iv.entity.ProductStock;
 import org.ever._4ever_be_scm.scm.iv.entity.SupplierCompany;
+import org.ever._4ever_be_scm.scm.iv.entity.SupplierUser;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductStockRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.SupplierCompanyRepository;
+import org.ever._4ever_be_scm.scm.iv.repository.SupplierUserRepository;
 import org.ever._4ever_be_scm.scm.mm.entity.ProductOrder;
 import org.ever._4ever_be_scm.scm.mm.entity.ProductOrderItem;
 import org.ever._4ever_be_scm.scm.mm.repository.ProductOrderItemRepository;
@@ -17,12 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
-
-import static org.ever._4ever_be_scm.scm.mm.entity.QProductOrderItem.productOrderItem;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +34,7 @@ public class ExternalApiServiceImpl implements ExternalApiService {
     private final ProductStockRepository productStockRepository;
     private final SupplierCompanyRepository supplierCompanyRepository;
     private final ProductOrderItemRepository productOrderItemRepository;
+    private final SupplierUserRepository supplierUserRepository;
 
     @Override
     public ProductOrderItemResponseDto getProductOrderItems(String productOrderId) {
@@ -228,5 +229,20 @@ public class ExternalApiServiceImpl implements ExternalApiService {
                 .collect(Collectors.toList());
         return ProductMultipleResponseDto.builder().products(productDtos).build();
     }
+
+    @Override
+    public SupplierCompanyIdDto getSupplierCompanyId(SupplierUserIdDto request) {
+        SupplierUser supplierUser = supplierUserRepository.findByUserId(request.getSupplierUserId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND, "사용자를 찾을 수 없습니다."));
+
+        SupplierCompany supplierCompany = supplierCompanyRepository.findBySupplierUser(supplierUser)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND, "공급사를 찾을 수 없습니다."));
+
+        SupplierCompanyIdDto response = new SupplierCompanyIdDto();
+        response.setSupplierCompanyId(supplierCompany.getId());
+
+        return response;
+    }
+
 
 }

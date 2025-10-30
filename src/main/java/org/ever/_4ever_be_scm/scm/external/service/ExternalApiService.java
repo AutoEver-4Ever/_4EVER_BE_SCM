@@ -40,4 +40,6 @@ public interface ExternalApiService {
      * 카테고리가 ITEM인 Product 목록 반환 (productId, productName, uomName, unitPrice)
      */
     ProductMultipleResponseDto getItemCategoryProducts();
+
+    SupplierCompanyIdDto getSupplierCompanyId(SupplierUserIdDto request);
 }
