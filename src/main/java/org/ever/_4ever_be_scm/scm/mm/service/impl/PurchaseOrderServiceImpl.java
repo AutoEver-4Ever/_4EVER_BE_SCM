@@ -220,7 +220,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     @Override
     @Transactional
-    public void approvePurchaseOrder(String purchaseOrderId) {
+    public void approvePurchaseOrder(String purchaseOrderId, String requesterId) {
         ProductOrder productOrder = productOrderRepository.findById(purchaseOrderId)
                 .orElseThrow(() -> new RuntimeException("발주서를 찾을 수 없습니다: " + purchaseOrderId));
         
@@ -232,7 +232,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         ProductOrderApproval updatedApproval = approval.toBuilder()
                 .approvalStatus("APPROVAL")
                 .approvedAt(LocalDateTime.now())
-                .approvedBy("system")
+                .approvedBy(requesterId)
                 .build();
 
         productOrderApprovalRepository.save(updatedApproval);
@@ -240,7 +240,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     @Override
     @Transactional
-    public void rejectPurchaseOrder(String purchaseOrderId, String reason) {
+    public void rejectPurchaseOrder(String purchaseOrderId, String requesterId, String reason) {
         ProductOrder productOrder = productOrderRepository.findById(purchaseOrderId)
                 .orElseThrow(() -> new RuntimeException("발주서를 찾을 수 없습니다: " + purchaseOrderId));
         
@@ -254,7 +254,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .approvalStatus("REJECTED")
                 .approvedAt(LocalDateTime.now())
                 .rejectedReason(reason)
-                .approvedBy("system")
+                .approvedBy(requesterId)
                 .build();
 
         productOrderApprovalRepository.save(updatedApproval);

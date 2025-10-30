@@ -22,9 +22,11 @@ public class StockPurchaseController {
      */
     @PostMapping
     public ResponseEntity<ApiResponse<String>> createStockPurchaseRequest(
-            @RequestBody StockPurchaseRequestDto requestDto) {
+            @RequestBody StockPurchaseRequestDto requestDto,
+            @RequestParam String requesterId
+            ) {
         try {
-            String requestId = stockPurchaseService.createStockPurchaseRequest(requestDto);
+            String requestId = stockPurchaseService.createStockPurchaseRequest(requestDto, requesterId);
             return ResponseEntity.ok(ApiResponse.success(requestId, "재고성 구매요청이 생성되었습니다.", HttpStatus.OK));
         } catch (Exception e) {
             return ResponseEntity.badRequest()

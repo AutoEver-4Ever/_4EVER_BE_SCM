@@ -15,7 +15,6 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class PurchaseRequisitionCreateRequestDto {
-    private String requesterId;
     private List<ItemDto> items;
 
     @Data

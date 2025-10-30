@@ -12,7 +12,7 @@ public interface PurchaseRequisitionService {
     
     void createPurchaseRequisition(PurchaseRequisitionCreateVo createVo);
     
-    void approvePurchaseRequisition(String purchaseRequisitionId);
+    void approvePurchaseRequisition(String purchaseRequisitionId, String requesterId);
     
-    void rejectPurchaseRequisition(String purchaseRequisitionId, PurchaseRequisitionRejectRequestDto requestDto);
+    void rejectPurchaseRequisition(String purchaseRequisitionId, PurchaseRequisitionRejectRequestDto requestDto, String requesterId);
 }
