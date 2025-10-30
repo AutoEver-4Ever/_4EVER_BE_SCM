@@ -21,10 +21,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -55,17 +55,47 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
 
         final String statusCode = searchVo.getStatusCode();
 
+        // 모든 구매요청서 조회
+        List<ProductRequest> allRequests = productRequestRepository.findAll();
+        
+        // 모든 요청자 ID 수집 (중복 제거)
+        List<String> requesterIds = allRequests.stream()
+                .map(ProductRequest::getRequesterId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        
+        // 한 번에 모든 사용자 정보 조회
+        Map<String, InternalUserResponseDto> userInfoMap = new HashMap<>();
+        if (!requesterIds.isEmpty()) {
+            try {
+                List<InternalUserResponseDto> userInfos = internalUserServicePort.getInternalUserInfosByIds(requesterIds);
+
+                if (userInfos != null && !userInfos.isEmpty()) {
+                    userInfoMap = userInfos.stream()
+                            .collect(Collectors.toMap(
+                                    InternalUserResponseDto::getUserId,
+                                    user -> user
+                            ));
+            }
+            } catch (Exception e) {
+                // 외부 서비스 호출 실패 시 빈 맵으로 처리
+                userInfoMap = new HashMap<>();
+            }
+        }
+        
+        final Map<String, InternalUserResponseDto> finalUserInfoMap = userInfoMap;
 
         // 조건에 따른 필터링
-        List<ProductRequest> allRequests = productRequestRepository.findAll();
         List<ProductRequest> filteredRequests = allRequests.stream()
                 .filter(request -> {
+                    // 상태 필터링
                     if (statusCode != null && !"ALL".equalsIgnoreCase(statusCode)) {
                         if (request.getApprovalId().getApprovalStatus() == null || !request.getApprovalId().getApprovalStatus().equalsIgnoreCase(statusCode)) {
                             return false;
                         }
                     }
-                    // 간단한 필터링만 적용 (실제 필드명 부족으로 인해 기본적인 필터링만)
+                    
                     // 날짜 범위 필터링
                     if (startDateTime != null && request.getCreatedAt().isBefore(startDateTime)) {
                         return false;
@@ -73,35 +103,33 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
                     if (endDateTime != null && request.getCreatedAt().isAfter(endDateTime)) {
                         return false;
                     }
-                    return true;
-                })
-                .filter(request -> {
-                    // Type 기반 키워드 검색 지원
+                    
+                    // Type 기반 키워드 검색
                     String type = searchVo.getType();
                     String keyword = searchVo.getKeyword();
                     if (keyword != null && !keyword.isEmpty()) {
                         if ("requesterName".equalsIgnoreCase(type)) {
-                            // 현재 DB에 requesterName이 없으므로 requesterId로 대체 검색
-                            if (request.getRequesterId() == null || !request.getRequesterId().toLowerCase().contains(keyword.toLowerCase())) {
+                            // 외부에서 받아온 사용자 정보에서 이름 검색
+                            var userInfo = finalUserInfoMap.get(request.getRequesterId());
+                            if (userInfo == null || userInfo.getName() == null ||
+                                !userInfo.getName().toLowerCase().contains(keyword.toLowerCase())) {
                                 return false;
                             }
                         } else if ("departmentName".equalsIgnoreCase(type)) {
-                            // department 정보가 ProductRequest에 없으므로 검색 불가 -> skip 필터(보존)
-                            // TODO: department 엔티티 연동 시 여기에 구현
+                            // 외부에서 받아온 사용자 정보에서 부서명 검색
+                            var userInfo = finalUserInfoMap.get(request.getRequesterId());
+                            if (userInfo == null || userInfo.getDepartmentName() == null || 
+                                !userInfo.getDepartmentName().toLowerCase().contains(keyword.toLowerCase())) {
+                                return false;
+                            }
                         } else if ("productRequestNumber".equalsIgnoreCase(type)) {
-                            if (request.getProductRequestCode() == null || !request.getProductRequestCode().contains(keyword.toLowerCase())) {
+                            if (request.getProductRequestCode() == null || 
+                                !request.getProductRequestCode().toLowerCase().contains(keyword.toLowerCase())) {
                                 return false;
                             }
                         }
                     }
-
-                    // 날짜 범위 필터링
-                    if (startDateTime != null && request.getCreatedAt().isBefore(startDateTime)) {
-                        return false;
-                    }
-                    if (endDateTime != null && request.getCreatedAt().isAfter(endDateTime)) {
-                        return false;
-                    }
+                    
                     return true;
                 })
                 .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
@@ -114,15 +142,20 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
         
         // DTO 변환
         List<PurchaseRequisitionListResponseDto> responseDtos = pagedRequests.stream()
-                .map(request -> PurchaseRequisitionListResponseDto.builder()
-                        .purchaseRequisitionId(request.getId())
-                        .purchaseRequisitionNumber(request.getProductRequestCode())
-                        .requesterId(request.getRequesterId())
-                        .requesterName("김철수") // Mock 데이터
-                        .requestDate(request.getCreatedAt())
-                        .totalAmount(request.getTotalPrice())
-                        .statusCode(request.getApprovalId().getApprovalStatus())
-                        .build())
+                .map(request -> {
+                    var userInfo = finalUserInfoMap.get(request.getRequesterId());
+                    return PurchaseRequisitionListResponseDto.builder()
+                            .purchaseRequisitionId(request.getId())
+                            .purchaseRequisitionNumber(request.getProductRequestCode())
+                            .requesterId(request.getRequesterId())
+                            .requesterName(userInfo != null ? userInfo.getName() : "알 수 없음")
+                            .requestDate(request.getCreatedAt())
+                            .departmentId(userInfo != null ? userInfo.getDepartmentId() : null)
+                            .departmentName(userInfo != null ? userInfo.getDepartmentName() : null)
+                            .totalAmount(request.getTotalPrice())
+                            .statusCode(request.getApprovalId().getApprovalStatus())
+                            .build();
+                })
                 .toList();
                 
         return new PageImpl<>(responseDtos, pageable, filteredRequests.size());
@@ -164,7 +197,7 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
                 .id(productRequest.getId())
                 .purchaseRequisitionNumber(productRequest.getProductRequestCode())
                 .requesterId(productRequest.getRequesterId())
-                .requesterName(userInfo.getUserName())
+                .requesterName(userInfo.getName())
                 .departmentId(userInfo.getDepartmentId()) // Mock 데이터
                 .departmentName(userInfo.getDepartmentName())
                 .requestDate(productRequest.getCreatedAt())

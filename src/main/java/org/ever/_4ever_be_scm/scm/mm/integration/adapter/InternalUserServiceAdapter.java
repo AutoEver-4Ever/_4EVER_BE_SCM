@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ever._4ever_be_scm.common.response.ApiResponse;
 import org.ever._4ever_be_scm.scm.mm.integration.dto.InternalUserResponseDto;
-import org.ever._4ever_be_scm.scm.mm.integration.dto.InternalUsersResponseDto;
 import org.ever._4ever_be_scm.scm.mm.integration.port.InternalUserServicePort;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
@@ -50,17 +49,17 @@ public class InternalUserServiceAdapter implements InternalUserServicePort {
     }
 
     @Override
-    public InternalUsersResponseDto getInternalUserInfosByIds(List<String> internalUserIds){
+    public List<InternalUserResponseDto>  getInternalUserInfosByIds(List<String> internalUserIds){
         log.info("Business employee 서비스 호출 (multiple) - internalUserIds: {}", internalUserIds);
 
         try {
-            Map<String, List<String>> requestBody = Map.of("internalUserIds", internalUserIds);
+            Map<String, List<String>> requestBody = Map.of("userIds", internalUserIds);
 
-            ApiResponse<InternalUsersResponseDto> response = restClient.post()
+            ApiResponse<List<InternalUserResponseDto> > response = restClient.post()
                     .uri(businessServiceUrl + "/business/hrm/employees/multiple")
                     .body(requestBody)
                     .retrieve()
-                    .body(new ParameterizedTypeReference<ApiResponse<InternalUsersResponseDto>>() {});
+                    .body(new ParameterizedTypeReference<ApiResponse<List<InternalUserResponseDto> >>() {});
 
             if (response != null && response.isSuccess()) {
                 log.info("Business employee 서비스 호출 성공 (multiple) - count: {}", internalUserIds.size());

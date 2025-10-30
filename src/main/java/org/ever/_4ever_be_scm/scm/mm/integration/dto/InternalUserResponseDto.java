@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class InternalUserResponseDto {
     private String userId;
-    private String userName;
+    private String name;
     private String departmentId;
     private String departmentName;
     private String phoneNumber;
