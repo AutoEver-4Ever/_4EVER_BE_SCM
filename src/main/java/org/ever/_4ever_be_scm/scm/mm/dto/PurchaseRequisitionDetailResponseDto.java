@@ -1,5 +1,6 @@
 package org.ever._4ever_be_scm.scm.mm.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -21,6 +22,7 @@ public class PurchaseRequisitionDetailResponseDto {
     private String requesterName;
     private String departmentId;
     private String departmentName;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime requestDate;
     private String statusCode;
     private List<ItemDto> items;
@@ -33,6 +35,7 @@ public class PurchaseRequisitionDetailResponseDto {
     public static class ItemDto {
         private String itemId;
         private String itemName;
+        @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
         private LocalDateTime dueDate;
         private BigDecimal quantity;
         private String uomCode;

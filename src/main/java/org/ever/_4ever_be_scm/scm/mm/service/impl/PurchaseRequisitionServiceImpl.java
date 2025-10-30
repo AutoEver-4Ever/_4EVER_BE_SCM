@@ -143,9 +143,15 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
         List<PurchaseRequisitionDetailResponseDto.ItemDto> itemDtos = new ArrayList<>();
         for (ProductRequestItem item : items) {
             Product product = productRepository.findById(item.getProductId()).orElse(null);
+
+            String productName = "";
+            if (product != null && product.getProductName() != null) {
+                productName = product.getProductName();
+            }
+
             itemDtos.add(PurchaseRequisitionDetailResponseDto.ItemDto.builder()
                     .itemId(item.getProductId())
-                    .itemName(product.getProductName())
+                    .itemName(productName)
                     .quantity(item.getCount())
                     .dueDate(item.getPreferredDeliveryDate())
                     .uomCode(item.getUnit())

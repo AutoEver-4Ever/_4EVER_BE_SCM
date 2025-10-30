@@ -198,7 +198,7 @@ public class MockDataInitializer {
         for (int i = 1; i <= 5; i++) {
             ProductOrderApproval approval = ProductOrderApproval.builder()
                     .approvalStatus(i % 2 == 1 ? "APPROVED" : "PENDING")
-                    .approvedBy("internalUser-" + (i-1))
+                    .approvedBy("internel" + (i-1))
                     .approvedAt(LocalDateTime.now().minusDays(i))
                     .rejectedReason(i % 2 == 0 ? "검토 필요" : null)
                     .build();
@@ -225,7 +225,7 @@ public class MockDataInitializer {
             ProductOrder order = ProductOrder.builder()
                     .productOrderCode("PO-" + String.format("%06d", 202400 + i))
                     .productOrderType(i % 2 == 1 ? "MATERIAL" : "NON_STOCK")
-                    .requesterId("internalUser-" + i)
+                    .requesterId("internel" + i)
                     .approvalId(orderApprovals.get(i - 1))
                     .shipmentId(shipments.get(i - 1))
                     .totalPrice(BigDecimal.valueOf(1000000 + i * 500000))
@@ -256,7 +256,7 @@ public class MockDataInitializer {
         for (int i = 1; i <= 5; i++) {
             ProductRequestApproval approval = ProductRequestApproval.builder()
                     .approvalStatus(i % 2 == 1 ? "APPROVED" : "PENDING")
-                    .approvedBy(String.valueOf(4000 + i))
+                    .approvedBy("internel" + (i-1))
                     .approvedAt(LocalDateTime.now().minusDays(i))
                     .rejectedReason(i % 2 == 0 ? "추가 검토 필요" : null)
                     .build();
@@ -270,7 +270,7 @@ public class MockDataInitializer {
             ProductRequest request = ProductRequest.builder()
                     .productRequestCode("PR-" + String.format("%06d", 202400 + i))
                     .productRequestType(i % 2 == 1 ? "MATERIAL" : "NON_STOCK")
-                    .requesterId(String.valueOf(5000 + i))
+                    .requesterId("internel" + i)
                     .totalPrice(BigDecimal.valueOf(500000 + i * 100000))
                     .approvalId(requestApprovals.get(i - 1))
                     .build();

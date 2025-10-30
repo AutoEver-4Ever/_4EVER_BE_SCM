@@ -32,7 +32,7 @@ public class InternalUserServiceAdapter implements InternalUserServicePort {
             Map<String, String> requestBody = Map.of("InternalUserId", internalUserId);
 
             ApiResponse<InternalUserResponseDto> response = restClient.post()
-                    .uri(businessServiceUrl + "/business/hrm/employee/{userId}", internalUserId)
+                    .uri(businessServiceUrl + "/business/hrm/{userId}/employee", internalUserId)
                     .retrieve()
                     .body(new ParameterizedTypeReference<ApiResponse<InternalUserResponseDto>>() {});
 
