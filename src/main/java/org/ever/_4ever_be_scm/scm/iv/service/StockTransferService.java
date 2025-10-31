@@ -23,7 +23,7 @@ public interface StockTransferService {
      * 
      * @param request 재고 이동 요청 정보
      */
-    void createStockTransfer(StockTransferRequestDto request);
+    void createStockTransfer(StockTransferRequestDto request, String requesterId);
     
     /**
      * 재고 입출고 처리

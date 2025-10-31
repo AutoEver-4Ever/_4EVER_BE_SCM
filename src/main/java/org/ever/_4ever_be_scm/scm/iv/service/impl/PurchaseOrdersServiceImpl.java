@@ -34,8 +34,8 @@ public class PurchaseOrdersServiceImpl implements PurchaseOrdersService {
      */
     @Override
     public Page<PurchaseOrderDto> getReceivingPurchaseOrders(Pageable pageable) {
-        // DB 조회 (페이징) - RECEIVING 상태만
-        Page<ProductOrder> productOrders = productOrderRepository.findByApprovalId_ApprovalStatus("RECEIVING", pageable);
+        // DB 조회 (페이징) - DELIVERING 상태만
+        Page<ProductOrder> productOrders = productOrderRepository.findByApprovalId_ApprovalStatus("DELIVERING", pageable);
 
         // DTO 변환
         List<PurchaseOrderDto> purchaseOrderDtos = productOrders.getContent().stream()
@@ -46,7 +46,7 @@ public class PurchaseOrdersServiceImpl implements PurchaseOrdersService {
                         .orderDate(po.getCreatedAt())
                         .dueDate(po.getDueDate())
                         .totalAmount(po.getTotalPrice())
-                        .statusCode(po.getApprovalId().getApprovalStatus())
+                        .statusCode("RECEIVING")
                         .build())
                 .collect(Collectors.toList());
 
@@ -70,10 +70,10 @@ public class PurchaseOrdersServiceImpl implements PurchaseOrdersService {
         if (startDate != null && endDate != null) {
             // 시작일과 종료일이 모두 있는 경우 - dueDate 기준 필터링
             productOrders = productOrderRepository.findByApprovalId_ApprovalStatusAndDueDateBetween(
-                    "RECEIVED", startDate, endDate, pageable);
+                    "DELIVERED", startDate, endDate, pageable);
         } else {
-            // 날짜 필터가 없는 경우 - RECEIVED 상태만 조회
-            productOrders = productOrderRepository.findByApprovalId_ApprovalStatus("RECEIVED", pageable);
+            // 날짜 필터가 없는 경우 - DELIVERED 상태만 조회
+            productOrders = productOrderRepository.findByApprovalId_ApprovalStatus("DELIVERED", pageable);
         }
 
         // DTO 변환
@@ -85,7 +85,7 @@ public class PurchaseOrdersServiceImpl implements PurchaseOrdersService {
                         .orderDate(po.getCreatedAt())
                         .dueDate(po.getDueDate())
                         .totalAmount(po.getTotalPrice())
-                        .statusCode(po.getApprovalId().getApprovalStatus())
+                        .statusCode("RECEIVED")
                         .build())
                 .collect(Collectors.toList());
 

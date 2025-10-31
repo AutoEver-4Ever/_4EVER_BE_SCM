@@ -51,9 +51,12 @@ public class StockTransferController {
     @io.swagger.v3.oas.annotations.Operation(
             summary = "창고간 재고 이동"
     )
-    public ResponseEntity<ApiResponse<String>> createStockTransfer(@RequestBody StockTransferRequestDto request) {
+    public ResponseEntity<ApiResponse<String>> createStockTransfer(
+            @RequestBody StockTransferRequestDto request,
+            @RequestParam String requesterId
+    ) {
         try {
-            stockTransferService.createStockTransfer(request);
+            stockTransferService.createStockTransfer(request,requesterId);
             return ResponseEntity.ok(ApiResponse.success(null, "재고 이동이 성공적으로 처리되었습니다.", HttpStatus.OK));
         } catch (Exception e) {
             return ResponseEntity.badRequest()

@@ -125,12 +125,21 @@ public class MockDataInitializer {
         // 3. Warehouse 생성
         List<Warehouse> warehouses = new ArrayList<>();
         for (int i = 1; i <= 5; i++) {
+            String createdById = null;
+
+            // internel1 ~ internel3까지만 설정
+            if (i > 3) {
+                createdById = "internel" + 2;
+            }
+            else
+                createdById = "internel" + i;
+
             Warehouse warehouse = Warehouse.builder()
                     .warehouseCode("WH" + String.format("%03d", i))
                     .warehouseName("창고" + i)
                     .warehouseType(i % 2 == 1 ? "ITEM" : "MATERIAL")
                     .status("ACTIVE")
-                    .internalUserId("internalUser-" + i)
+                    .internalUserId(createdById)
                     .location("경기도 천안시"+i)
                     .build();
             warehouses.add(warehouse);
@@ -170,6 +179,15 @@ public class MockDataInitializer {
         // 6. ProductStockLog 생성
         List<ProductStockLog> logs = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
+            String createdById = null;
+
+            // internel1 ~ internel3까지만 설정
+            if (i==0 || i > 3) {
+                createdById = "internel" + 2;
+            }
+            else
+                createdById = "internel" + i;
+
             ProductStockLog log = ProductStockLog.builder()
                     .productStock(stocks.get(i))
                     .movementType(i % 2 == 0 ? "입고" : "출고")
@@ -178,11 +196,13 @@ public class MockDataInitializer {
                     .currentCount(BigDecimal.valueOf(100 + i * 20))
                     .fromWarehouse(i > 0 ? warehouses.get(i - 1) : null)
                     .toWarehouse(warehouses.get(i))
-                    .createdById("internalUser-" + i)
+                    .createdById(createdById)
                     .referenceCode("PO" + String.format("%03d", i + 1))
                     .build();
+
             logs.add(log);
         }
+
         productStockLogRepository.saveAll(logs);
 
         log.info("IV 도메인 목업 데이터 생성 완료");

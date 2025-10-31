@@ -11,6 +11,8 @@ import org.ever._4ever_be_scm.scm.iv.repository.ProductStockLogRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductStockRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.WarehouseRepository;
 import org.ever._4ever_be_scm.scm.iv.service.StockTransferService;
+import org.ever._4ever_be_scm.scm.mm.integration.dto.InternalUserResponseDto;
+import org.ever._4ever_be_scm.scm.mm.integration.port.InternalUserServicePort;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,7 @@ public class StockTransferServiceImpl implements StockTransferService {
     private final ProductStockLogRepository productStockLogRepository;
     private final ProductStockRepository productStockRepository;
     private final WarehouseRepository warehouseRepository;
+    private final InternalUserServicePort  internalUserServicePort;
     
     /**
      * 재고 이동 목록 조회
@@ -50,7 +53,7 @@ public class StockTransferServiceImpl implements StockTransferService {
      */
     @Override
     @Transactional
-    public void createStockTransfer(StockTransferRequestDto request) {
+    public void createStockTransfer(StockTransferRequestDto request, String requesterId) {
         // 1. 현재 productStock 조회 (itemId로 Product 찾기)
         ProductStock currentStock = productStockRepository.findByProductId(request.getItemId())
                 .orElseThrow(() -> new RuntimeException("해당 제품의 재고를 찾을 수 없습니다."));
@@ -67,6 +70,10 @@ public class StockTransferServiceImpl implements StockTransferService {
 
         if(!fromWarehouse.getId().equals(currentStock.getWarehouse().getId())) {
             throw new RuntimeException("출발 창고가 다릅니다");
+        }
+
+        if(!fromWarehouse.getInternalUserId().equals(requesterId)){
+            throw new RuntimeException("담당자가 아닙니다.");
         }
         
         Warehouse toWarehouse = warehouseRepository.findById(request.getToWarehouseId())
@@ -97,7 +104,7 @@ public class StockTransferServiceImpl implements StockTransferService {
                 .currentCount(request.getStockQuantity())
                 .fromWarehouse(fromWarehouse)
                 .toWarehouse(toWarehouse)
-                .createdById("transfer-manager-001") // 임의의 담당자 ID
+                .createdById(requesterId) // 임의의 담당자 ID
                 .referenceCode(trCode)
                 .note(request.getReason())
                 .build();
@@ -177,15 +184,16 @@ public class StockTransferServiceImpl implements StockTransferService {
     }
 
     private StockTransferDto mapToStockTransferDto(ProductStockLog stockLog) {
-        //todo user연결하면 수정
-        String createdByName = "메롱";
+
+        InternalUserResponseDto managerInfo = internalUserServicePort.getInternalUserInfoById(stockLog.getCreatedById());
+
         return StockTransferDto.builder()
                 .type(stockLog.getMovementType())
                 .quantity(stockLog.getChangeCount().intValue())
                 .uomName(stockLog.getProductStock().getProduct().getUnit())
                 .itemName(stockLog.getProductStock().getProduct().getProductName())
                 .workDate(stockLog.getCreatedAt())
-                .managerName(createdByName)
+                .managerName(managerInfo.getName())
                 .build();
     }
 
