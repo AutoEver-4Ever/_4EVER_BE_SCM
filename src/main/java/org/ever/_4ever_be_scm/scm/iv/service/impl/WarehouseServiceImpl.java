@@ -91,7 +91,6 @@ public class WarehouseServiceImpl implements WarehouseService {
 
         InternalUserResponseDto managerInfo = internalUserServicePort.getInternalUserInfoById(warehouse.getInternalUserId());
 
-        // todo 담당자 연결
         // 담당자 정보는 실제 구현에서는 별도 저장소 조회 필요
         String managerName = managerInfo.getName();
         String phoneNumber = managerInfo.getPhoneNumber();
