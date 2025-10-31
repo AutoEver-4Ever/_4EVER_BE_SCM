@@ -19,6 +19,9 @@ public class KafkaTopicConfig {
     public static final String SCM_EVENT_TOPIC = "scm-event";
     public static final String BUSINESS_EVENT_TOPIC = "business-event";
     public static final String ALARM_EVENT_TOPIC = "alarm-event";
+    public static final String CREATE_SUPPLIER_USER_TOPIC = "create-supplier-user";
+    public static final String SUPPLIER_USER_RESULT_TOPIC = "supplier-user-result";
+    public static final String USER_ROLLBACK_TOPIC = "user-rollback";
 
     @Bean
     public NewTopic scmStockReserveTopic() {
@@ -79,6 +82,30 @@ public class KafkaTopicConfig {
     @Bean
     public NewTopic alarmEventTopic() {
         return TopicBuilder.name(ALARM_EVENT_TOPIC)
+            .partitions(3)
+            .replicas(1)
+            .build();
+    }
+
+    @Bean
+    public NewTopic createSupplierUserTopic() {
+        return TopicBuilder.name(CREATE_SUPPLIER_USER_TOPIC)
+            .partitions(3)
+            .replicas(1)
+            .build();
+    }
+
+    @Bean
+    public NewTopic supplierUserResultTopic() {
+        return TopicBuilder.name(SUPPLIER_USER_RESULT_TOPIC)
+            .partitions(3)
+            .replicas(1)
+            .build();
+    }
+
+    @Bean
+    public NewTopic userRollbackTopic() {
+        return TopicBuilder.name(USER_ROLLBACK_TOPIC)
             .partitions(3)
             .replicas(1)
             .build();

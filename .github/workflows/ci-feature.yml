@@ -13,9 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      checks: write
       pull-requests: write
       issues: write
-      checks: write
 
 
     steps:
@@ -54,15 +54,22 @@ jobs:
           else
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
+          
 
       - name: 테스트 리포트 생성
-        if: always() && steps.test-results.outputs.exists == 'true'
+        if: >-
+          always() &&
+          steps.test-results.outputs.exists == 'true' &&
+          (github.event_name != 'pull_request' ||
+           github.event.pull_request.head.repo.full_name == github.repository)
+        continue-on-error: true
         uses: dorny/test-reporter@v1
         with:
-          name: 테스트 결과 - ${{ github.ref_name }}
+          name: 테스트 결과
           path: '**/build/test-results/test/*.xml'
           reporter: java-junit
           fail-on-error: true
+
 
       - name: 테스트 실패 시 코멘트
         if: failure()

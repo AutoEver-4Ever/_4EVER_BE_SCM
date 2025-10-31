@@ -1,0 +1,397 @@
+package org.ever._4ever_be_scm.scm.pp.service.impl;
+
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
+import org.ever._4ever_be_scm.scm.iv.entity.Product;
+import org.ever._4ever_be_scm.scm.iv.entity.SupplierCompany;
+import org.ever._4ever_be_scm.scm.iv.repository.ProductRepository;
+import org.ever._4ever_be_scm.scm.pp.dto.BomCreateRequestDto;
+import org.ever._4ever_be_scm.scm.pp.dto.BomDetailResponseDto;
+import org.ever._4ever_be_scm.scm.pp.dto.BomListResponseDto;
+import org.ever._4ever_be_scm.scm.pp.entity.*;
+import org.ever._4ever_be_scm.scm.pp.repository.*;
+import org.ever._4ever_be_scm.scm.pp.service.BomService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.*;
+
+@Service
+@RequiredArgsConstructor
+public class BomServiceImpl implements BomService {
+    private final ProductRepository productRepository;
+    private final BomRepository bomRepository;
+    private final BomItemRepository bomItemRepository;
+    private final RoutingRepository routingRepository;
+    private final BomExplosionRepository bomExplosionRepository;
+    private final OperationRepository operationRepository;
+
+    @Override
+    @Transactional
+    public void createBom(BomCreateRequestDto requestDto) {
+        // 1. product 생성 및 저장
+        String uuid = UUID.randomUUID().toString().replace("-", "");
+        String productCode = "ITM-" + uuid.substring(uuid.length() - 6);
+        Product product = Product.builder()
+                .productCode(productCode)
+                .category("PRODUCT")
+                .productName(requestDto.getProductName())
+                .unit(requestDto.getUnit())
+                .build();
+        productRepository.save(product);
+
+        // 2. BOM 생성 및 저장
+        Bom bom = Bom.builder()
+                .productId(product.getId())
+                .bomCode("BOM-" + productCode)
+                .version(1)
+                .leadTime(BigDecimal.ZERO)
+                .build();
+        bom = bomRepository.save(bom);
+
+        BigDecimal maxDeliveryDays = BigDecimal.ZERO;
+        BigDecimal totalRequiredTime = BigDecimal.ZERO;
+        BigDecimal totalOriginPrice = BigDecimal.ZERO;
+
+        // 3. BOM_Item, Routing, BOM_Explosion 생성 및 저장
+        List<BomCreateRequestDto.BomItemRequestDto> items = requestDto.getItems();
+        for (BomCreateRequestDto.BomItemRequestDto item : items) {
+            String productId = item.getItemId(); // 항상 productId만 입력
+            Product componentProduct = productRepository.findById(productId).orElse(null);
+            if (componentProduct == null) {
+                throw new IllegalArgumentException("itemId " + productId + " is not found in product table");
+            }
+            String componentType = componentProduct.getCategory();
+            String componentId = productId;
+            BigDecimal originPrice = BigDecimal.ZERO;
+            BigDecimal deliveryDays = BigDecimal.ZERO;
+
+            if ("ITEM".equals(componentType)) {
+                // 원자재: 가격, 납기 supplier에서 조회
+                if (componentProduct.getOriginPrice() != null) originPrice = componentProduct.getOriginPrice();
+                if (componentProduct.getSupplierCompany() != null) {
+                    SupplierCompany supplier = componentProduct.getSupplierCompany();
+                    if (supplier.getDeliveryDays() != null) deliveryDays = BigDecimal.valueOf(supplier.getDeliveryDays());
+                }
+            } else if ("PRODUCT".equals(componentType)) {
+                // 완제품(BOM): 가격, 리드타임 BOM에서 조회
+                Optional<Bom>subBomOpt = bomRepository.findByProductId(productId);
+                if (subBomOpt.isPresent()) {
+                    Bom subBom = subBomOpt.get();
+                    componentId = subBom.getId(); // 하위 BOM의 bomId
+                    originPrice = subBom.getOriginPrice();
+                    deliveryDays = subBom.getLeadTime();
+                }
+            }
+            totalOriginPrice = totalOriginPrice.add(originPrice.multiply(BigDecimal.valueOf(item.getQuantity())));
+
+            BomItem bomItem = BomItem.builder()
+                    .bomId(bom.getId())
+                    .componentType(componentType)
+                    .componentId(componentId)
+                    .unit(requestDto.getUnit())
+                    .count(BigDecimal.valueOf(item.getQuantity()))
+                    .build();
+            bomItem = bomItemRepository.save(bomItem);
+
+            Routing routing = Routing.builder()
+                    .bomItemId(bomItem.getId())
+                    .operationId(item.getOperationId())
+                    .sequence(item.getSequence())
+                    .requiredTime(item.getQuantity())
+                    .build();
+            routing = routingRepository.save(routing);
+
+            // 납기일/리드타임 집계
+            if (deliveryDays.compareTo(maxDeliveryDays) > 0) {
+                maxDeliveryDays = deliveryDays;
+            }
+            totalRequiredTime = totalRequiredTime.add(BigDecimal.valueOf(item.getQuantity()));
+
+            BomExplosion explosion = BomExplosion.builder()
+                    .parentBomId(bom.getId())
+                    .componentProductId(componentId)
+                    .level(1)
+                    .totalRequiredCount(BigDecimal.valueOf(item.getQuantity()))
+                    .path(product.getProductName() + ">" + componentId)
+                    .routingId(routing.getId())
+                    .build();
+            bomExplosionRepository.save(explosion);
+        }
+
+        // 4. lead_time 계산 및 BOM 업데이트
+        // requiredTime(시간) -> 일 단위로 환산 (8시간=1일)
+        BigDecimal requiredDays = totalRequiredTime.divide(BigDecimal.valueOf(8), 0, RoundingMode.UP);
+        BigDecimal leadTime = requiredDays.add(maxDeliveryDays);
+        bom.setLeadTime(leadTime);
+        // 5. originPrice/sellingPrice 계산 (하위 품목 합산)
+        bom.setOriginPrice(totalOriginPrice);
+        bom.setSellingPrice(totalOriginPrice.multiply(BigDecimal.valueOf(1.3)));
+
+        product.updatePrice(totalOriginPrice,BigDecimal.valueOf(1.3));
+
+        productRepository.save(product);
+        bomRepository.save(bom);
+    }
+
+    @Override
+    @Transactional
+    public void updateBom(String bomId, BomCreateRequestDto requestDto) {
+        // 1. 기존 BOM 및 연관된 Product 조회
+        Bom bom = bomRepository.findById(bomId)
+                .orElseThrow(() -> new IllegalArgumentException("BOM not found with id: " + bomId));
+        Product product = productRepository.findById(bom.getProductId())
+                .orElseThrow(() -> new IllegalArgumentException("Product not found with id: " + bom.getProductId()));
+
+        int version = bom.getVersion();
+        // 2. 기존 BOMItem, Routing, BOMExplosion 삭제 (순서 중요: 외래키 제약조건 고려)
+        routingRepository.deleteByBomId(bomId);
+        bomExplosionRepository.deleteByParentBomId(bomId);
+        bomItemRepository.deleteByBomId(bomId);
+
+        // 3. Product 정보 업데이트
+        product.setProductName(requestDto.getProductName());
+        product.setUnit(requestDto.getUnit());
+        productRepository.save(product);
+
+        // 4. BOM 업데이트 시간 갱신
+        bom.setVersion(version+1);
+
+        // 5. 새로운 BOMItem, Routing, BOMExplosion 생성 (생성 로직과 동일)
+        BigDecimal maxDeliveryDays = BigDecimal.ZERO;
+        BigDecimal totalRequiredTime = BigDecimal.ZERO;
+        BigDecimal totalOriginPrice = BigDecimal.ZERO;
+
+        List<BomCreateRequestDto.BomItemRequestDto> items = requestDto.getItems();
+        for (BomCreateRequestDto.BomItemRequestDto item : items) {
+            String productId = item.getItemId(); // 항상 productId만 입력
+            Product componentProduct = productRepository.findById(productId).orElse(null);
+            if (componentProduct == null) {
+                throw new IllegalArgumentException("itemId " + productId + " is not found in product table");
+            }
+            String componentType = componentProduct.getCategory();
+            String componentId = productId;
+            BigDecimal originPrice = BigDecimal.ZERO;
+            BigDecimal deliveryDays = BigDecimal.ZERO;
+
+            if ("ITEM".equals(componentType)) {
+                // 원자재: 가격, 납기 supplier에서 조회
+                if (componentProduct.getOriginPrice() != null) originPrice = componentProduct.getOriginPrice();
+                if (componentProduct.getSupplierCompany() != null) {
+                    SupplierCompany supplier = componentProduct.getSupplierCompany();
+                    if (supplier.getDeliveryDays() != null) deliveryDays = BigDecimal.valueOf(supplier.getDeliveryDays());
+                }
+            } else if ("PRODUCT".equals(componentType)) {
+                // 완제품(BOM): 가격, 리드타임 BOM에서 조회
+                Optional<Bom>subBomOpt = bomRepository.findByProductId(productId);
+                if (subBomOpt.isPresent()) {
+                    Bom subBom = subBomOpt.get();
+                    componentId = subBom.getId(); // 하위 BOM의 bomId
+                    originPrice = subBom.getOriginPrice();
+                    deliveryDays = subBom.getLeadTime();
+                }
+            }
+            totalOriginPrice = totalOriginPrice.add(originPrice.multiply(BigDecimal.valueOf(item.getQuantity())));
+
+            BomItem bomItem = BomItem.builder()
+                    .bomId(bom.getId())
+                    .componentType(componentType)
+                    .componentId(componentId)
+                    .unit(requestDto.getUnit())
+                    .count(BigDecimal.valueOf(item.getQuantity()))
+                    .build();
+            bomItem = bomItemRepository.save(bomItem);
+
+            Routing routing = Routing.builder()
+                    .bomItemId(bomItem.getId())
+                    .operationId(item.getOperationId())
+                    .sequence(item.getSequence())
+                    .requiredTime(item.getQuantity())
+                    .build();
+            routing = routingRepository.save(routing);
+
+            // 납기일/리드타임 집계
+            if (deliveryDays.compareTo(maxDeliveryDays) > 0) {
+                maxDeliveryDays = deliveryDays;
+            }
+            totalRequiredTime = totalRequiredTime.add(BigDecimal.valueOf(item.getQuantity()));
+
+            BomExplosion explosion = BomExplosion.builder()
+                    .parentBomId(bom.getId())
+                    .componentProductId(componentId)
+                    .level(1)
+                    .totalRequiredCount(BigDecimal.valueOf(item.getQuantity()))
+                    .path(product.getProductName() + ">" + componentId)
+                    .routingId(routing.getId())
+                    .build();
+            bomExplosionRepository.save(explosion);
+        }
+
+        // 6. lead_time 계산 및 BOM 업데이트
+        BigDecimal requiredDays = totalRequiredTime.divide(BigDecimal.valueOf(8), 0, RoundingMode.UP);
+        BigDecimal leadTime = requiredDays.add(maxDeliveryDays);
+        bom.setLeadTime(leadTime);
+        // 7. originPrice/sellingPrice 계산 (하위 품목 합산)
+        bom.setOriginPrice(totalOriginPrice);
+        bom.setSellingPrice(totalOriginPrice.multiply(BigDecimal.valueOf(1.3)));
+
+        product.updatePrice(totalOriginPrice, BigDecimal.valueOf(1.3));
+
+        productRepository.save(product);
+        bomRepository.save(bom);
+    }
+
+    @Override
+    public Page<BomListResponseDto> getBomList(Pageable pageable) {
+        Page<Bom> bomPage = bomRepository.findAll(pageable);
+        List<BomListResponseDto> dtoList = new ArrayList<>();
+        for (Bom bom : bomPage.getContent()) {
+            Product product = productRepository.findById(String.valueOf(bom.getProductId())).orElse(null);
+            dtoList.add(BomListResponseDto.builder()
+                .bomId(String.valueOf(bom.getId()))
+                .bomNumber(bom.getBomCode())
+                .productId(product != null ? product.getId() : null)
+                .productNumber(product != null ? product.getProductCode() : null)
+                .productName(product != null ? product.getProductName() : null)
+                .version("v" + bom.getVersion())
+                .statusCode("ACTIVE")
+                .lastModifiedAt(bom.getUpdatedAt() != null ? bom.getUpdatedAt() : null)
+                .build());
+        }
+        return new PageImpl<>(dtoList, pageable, bomPage.getTotalElements());
+    }
+
+    @Override
+    @Transactional
+    public BomDetailResponseDto getBomDetail(String bomId) {
+        Bom bom = bomRepository.findById(bomId).orElse(null);
+        if (bom == null) return null;
+        Product product = productRepository.findById(bom.getProductId()).orElse(null);
+        List<BomExplosion> explosions = bomExplosionRepository.findByParentBomId(bomId);
+        List<BomDetailResponseDto.BomComponentDto> components = new ArrayList<>();
+        Map<String, List<BomDetailResponseDto.LevelStructureDto>> levelStructure = new HashMap<>();
+        List<BomDetailResponseDto.RoutingDto> routingList = new ArrayList<>();
+
+        for (BomExplosion exp : explosions) {
+            Optional<BomItem> bomItemOpt = bomItemRepository.findByBomIdAndComponentId(bomId, exp.getComponentProductId());
+            if (bomItemOpt.isEmpty()) continue;
+            BomItem bomItem = bomItemOpt.get();
+            Optional<Routing> routingOpt = routingRepository.findByBomItemId(bomItem.getId());
+            Routing routing = routingOpt.orElse(null);
+            String operationName = null;
+            if (routing != null && routing.getOperationId() != null) {
+                operationName = operationRepository.findById(routing.getOperationId())
+                    .map(Operation::getOpName).orElse(null);
+            }
+            Product compProduct = productRepository.findById(bomItem.getComponentId()).orElse(null);
+            int parentQuantity = bomItem.getCount().intValue();
+            int parentLevel = exp.getLevel();
+            String levelStr = "Level " + parentLevel;
+            if ("PRODUCT".equals(bomItem.getComponentType())) {
+                BomDetailResponseDto subBomDetail = getBomDetail(bomItem.getComponentId());
+                if (subBomDetail != null) {
+                    components.add(BomDetailResponseDto.BomComponentDto.builder()
+                        .itemId(subBomDetail.getBomId())
+                        .code(subBomDetail.getProductNumber())
+                        .name(subBomDetail.getProductName())
+                        .quantity(parentQuantity)
+                        .unit(bomItem.getUnit())
+                        .level(levelStr)
+                        .supplierName(null)
+                        .operationId(routing != null ? routing.getOperationId() : null)
+                        .operationName(operationName)
+                        .componentType(bomItem.getComponentType())
+                        .build());
+                    // 하위 BOM의 구성품을 parentQuantity만큼 곱해서, 레벨+1로 추가
+                    for (BomDetailResponseDto.BomComponentDto subComp : subBomDetail.getComponents()) {
+                        components.add(BomDetailResponseDto.BomComponentDto.builder()
+                            .itemId(subComp.getItemId())
+                            .code(subComp.getCode())
+                            .name(subComp.getName())
+                            .quantity(subComp.getQuantity() * parentQuantity)
+                            .unit(subComp.getUnit())
+                            .level("Level " + (parentLevel + 1))
+                            .supplierName(subComp.getSupplierName())
+                            .operationId(subComp.getOperationId())
+                            .operationName(subComp.getOperationName())
+                            .componentType(subComp.getComponentType())
+                            .build());
+                    }
+                    // levelStructure도 parentQuantity만큼 곱해서, 레벨+1로 추가
+                    subBomDetail.getLevelStructure().forEach((k, v) -> {
+                        String newLevel = "Level " + (parentLevel + 1);
+                        List<BomDetailResponseDto.LevelStructureDto> newList = new ArrayList<>();
+                        for (BomDetailResponseDto.LevelStructureDto subLevel : v) {
+                            String[] qtyUnit = subLevel.getQuantity().split(" ");
+                            int qty = Integer.parseInt(qtyUnit[0]) * parentQuantity;
+                            String unit = qtyUnit.length > 1 ? qtyUnit[1] : "";
+                            newList.add(BomDetailResponseDto.LevelStructureDto.builder()
+                                .code(subLevel.getCode())
+                                .name(subLevel.getName())
+                                .quantity(qty + " " + unit)
+                                .build());
+                        }
+                        levelStructure.merge(newLevel, newList, (oldV, newV) -> { oldV.addAll(newV); return oldV; });
+                    });
+                    // routing 시퀀스 누적 (상위 BOM의 sequence + 하위 BOM의 sequence)
+                    for (BomDetailResponseDto.RoutingDto subRouting : subBomDetail.getRouting()) {
+                        int seq = (routing != null ? routing.getSequence() : 0) + (subRouting.getSequence() != null ? subRouting.getSequence() : 0);
+                        routingList.add(BomDetailResponseDto.RoutingDto.builder()
+                            .sequence(seq)
+                            .operationName(subRouting.getOperationName())
+                            .runTime(subRouting.getRunTime())
+                            .build());
+                    }
+                }
+            } else if (compProduct != null) {
+                components.add(BomDetailResponseDto.BomComponentDto.builder()
+                    .itemId(compProduct.getId())
+                    .code(compProduct.getProductCode())
+                    .name(compProduct.getProductName())
+                    .quantity(parentQuantity)
+                    .unit(bomItem.getUnit())
+                    .level(levelStr)
+                    .supplierName(compProduct.getSupplierCompany() != null ? compProduct.getSupplierCompany().getCompanyName() : null)
+                    .operationId(routing != null ? routing.getOperationId() : null)
+                    .operationName(operationName)
+                    .componentType(bomItem.getComponentType())
+                    .build());
+                levelStructure.computeIfAbsent(levelStr, k -> new ArrayList<>())
+                    .add(BomDetailResponseDto.LevelStructureDto.builder()
+                        .code(compProduct.getProductCode())
+                        .name(compProduct.getProductName())
+                        .quantity(parentQuantity + " " + bomItem.getUnit())
+                        .build());
+                routingList.add(BomDetailResponseDto.RoutingDto.builder()
+                    .sequence(routing != null ? routing.getSequence() : 0)
+                    .operationName(operationName)
+                    .runTime(routing != null ? routing.getRequiredTime() : 0)
+                    .build());
+            }
+        }
+        // routingList를 상대적 순서로 1부터 재부여
+        List<BomDetailResponseDto.RoutingDto> sortedRouting = new ArrayList<>(routingList);
+        sortedRouting.sort(Comparator.comparingInt(r -> r.getSequence() != null ? r.getSequence() : 0));
+        int seqNum = 1;
+        for (BomDetailResponseDto.RoutingDto r : sortedRouting) {
+            r.setSequence(seqNum++);
+        }
+        return BomDetailResponseDto.builder()
+            .bomId(bom.getId())
+            .bomNumber(bom.getBomCode())
+            .productId(product != null ? product.getId() : null)
+            .productNumber(product != null ? product.getProductCode() : null)
+            .productName(product != null ? product.getProductName() : null)
+            .version("v" + bom.getVersion())
+            .statusCode("ACTIVE")
+            .lastModifiedAt(bom.getUpdatedAt() != null ? bom.getUpdatedAt() : null)
+            .components(components)
+            .levelStructure(levelStructure)
+            .routing(sortedRouting)
+            .build();
+    }
+}
