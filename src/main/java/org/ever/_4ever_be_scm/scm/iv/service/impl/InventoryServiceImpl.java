@@ -17,6 +17,8 @@ import org.ever._4ever_be_scm.scm.iv.repository.ProductStockRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.WarehouseRepository;
 import org.ever._4ever_be_scm.scm.iv.service.InventoryService;
+import org.ever._4ever_be_scm.scm.mm.integration.dto.InternalUserResponseDto;
+import org.ever._4ever_be_scm.scm.mm.integration.port.InternalUserServicePort;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -41,6 +43,7 @@ public class InventoryServiceImpl implements InventoryService {
     private final ProductStockLogRepository productStockLogRepository;
     private final ProductRepository productRepository;
     private final WarehouseRepository warehouseRepository;
+    private final InternalUserServicePort internalUserServicePort;
 
     /**
      * 재고 목록 조회 (필터링 포함)
@@ -185,8 +188,7 @@ public class InventoryServiceImpl implements InventoryService {
      */
     private StockMovementDto mapToStockMovementDto(ProductStockLog stockLog) {
 
-        //todo user연결하면 수정
-        String createdByName = "메롱";
+        InternalUserResponseDto managerInfo = internalUserServicePort.getInternalUserInfoById(stockLog.getCreatedById());
 
         // 창고 코드 결정 (이동 방향에 따라)
         String toWarehouseCode = null;
@@ -203,7 +205,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .quantity(stockLog.getChangeCount().intValue())
                 .uomName(stockLog.getProductStock().getProduct().getUnit())
                 .movementDate(stockLog.getCreatedAt())
-                .managerName(createdByName)
+                .managerName(managerInfo.getName())
                 .to(toWarehouseCode)
                 .from(formWarehouseCode)
                 .referenceNumber(stockLog.getReferenceCode())

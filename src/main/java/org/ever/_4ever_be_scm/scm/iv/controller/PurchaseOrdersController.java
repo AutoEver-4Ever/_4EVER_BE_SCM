@@ -40,7 +40,7 @@ public class PurchaseOrdersController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         
-        // 서비스 호출 - RECEIVING 상태만 조회
+        // 서비스 호출 - DELIVERING 상태만 조회
         Page<PurchaseOrderDto> purchaseOrdersPage = purchaseOrderService.getReceivingPurchaseOrders(PageRequest.of(page, size));
         PagedResponseDto<PurchaseOrderDto> response = PagedResponseDto.from(purchaseOrdersPage);
         
@@ -70,7 +70,7 @@ public class PurchaseOrdersController {
         LocalDate start = startDate != null ? LocalDate.parse(startDate) : null;
         LocalDate end = endDate != null ? LocalDate.parse(endDate) : null;
         
-        // 서비스 호출 - RECEIVED 상태만 조회, dueDate 기준 필터링
+        // 서비스 호출 - DELIVERED 상태만 조회, dueDate 기준 필터링
         Page<PurchaseOrderDto> purchaseOrdersPage = purchaseOrderService.getReceivedPurchaseOrders(
                 PageRequest.of(page, size), start, end);
         PagedResponseDto<PurchaseOrderDto> response = PagedResponseDto.from(purchaseOrdersPage);

@@ -6,6 +6,8 @@ import org.ever._4ever_be_scm.scm.iv.dto.*;
 import org.ever._4ever_be_scm.scm.iv.entity.Warehouse;
 import org.ever._4ever_be_scm.scm.iv.repository.WarehouseRepository;
 import org.ever._4ever_be_scm.scm.iv.service.WarehouseService;
+import org.ever._4ever_be_scm.scm.mm.integration.dto.InternalUserResponseDto;
+import org.ever._4ever_be_scm.scm.mm.integration.port.InternalUserServicePort;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -26,6 +28,7 @@ import java.util.stream.Collectors;
 public class WarehouseServiceImpl implements WarehouseService {
 
     private final WarehouseRepository warehouseRepository;
+    private final InternalUserServicePort internalUserServicePort;
     
     /**
      * 창고 목록 조회
@@ -60,28 +63,12 @@ public class WarehouseServiceImpl implements WarehouseService {
                 .description(warehouse.getDescription())
                 .build();
 
-        // todo user 연결하면 추가
-        // 담당자 정보 구성 (현재 구조에서는 내부 사용자 ID만 있음)
-        // 실제 구현에서는 내부 사용자 저장소를 통해 조회해야 함
-        String managerId = "123";
-        String managerName = "미지정";
-        String managerPhone = "-";
-        String managerEmail = "-";
-        
-        if (warehouse.getInternalUserId() != null) {
-            // 실제 구현에서는 아래와 같이 저장소를 통해 조회
-            // InternalUser manager = internalUserRepository.findById(warehouse.getInternalUserId()).orElse(null);
-            // if (manager != null) {
-            //     managerName = manager.getName();
-            //     phoneNumber = manager.getPhone();
-            //     email = manager.getEmail();
-            // }
-            
-            // 간단한 구현을 위해 하드코딩
-            managerName = "김창고";
-            managerPhone = "031-123-4567";
-            managerEmail = "manager@everp.com";
-        }
+        InternalUserResponseDto managerInfo  = internalUserServicePort.getInternalUserInfoById(warehouse.getInternalUserId());
+
+        String managerId = managerInfo.getUserId();
+        String managerName = managerInfo.getName();
+        String managerPhone = managerInfo.getPhoneNumber();
+        String managerEmail = managerInfo.getEmail();
         
         WarehouseDetailDto.ManagerDto manager = WarehouseDetailDto.ManagerDto.builder()
                 .managerId(managerId)
@@ -102,17 +89,12 @@ public class WarehouseServiceImpl implements WarehouseService {
      */
     private WarehouseDto mapToWarehouseDto(Warehouse warehouse) {
 
+        InternalUserResponseDto managerInfo = internalUserServicePort.getInternalUserInfoById(warehouse.getInternalUserId());
+
         // todo 담당자 연결
         // 담당자 정보는 실제 구현에서는 별도 저장소 조회 필요
-        String managerName = "미지정";
-        String phoneNumber = "-";
-        
-        if (warehouse.getInternalUserId() != null) {
-            // 실제 구현에서는 내부 사용자 저장소를 통해 조회해야 함
-            // 간단한 구현을 위해 하드코딩
-            managerName = "김창고";
-            phoneNumber = "031-123-4567";
-        }
+        String managerName = managerInfo.getName();
+        String phoneNumber = managerInfo.getPhoneNumber();
         
         return WarehouseDto.builder()
                 .warehouseId(warehouse.getId())
