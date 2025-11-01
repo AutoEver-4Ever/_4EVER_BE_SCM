@@ -18,14 +18,7 @@ public class SupplierUserInitializer implements CommandLineRunner {
 
     private static final List<SeedSupplierUser> SUPPLIER_USERS = List.of(
         new SeedSupplierUser(
-            "019a357e-bd3f-7e3c-bb84-bd48e86f70e6", // supplier-user@everp.com
-            "supplier-user@everp.com",
-            "공급사 사용자",
-            "010-8000-0000",
-            "CU-001"
-        ),
-        new SeedSupplierUser(
-            "019a357e-bd3f-896d-5529-79ee4bf65f41", // supplier-admin@everp.com
+            "019a3df1-7843-7590-a5fd-94aa9aae7d0a", // supplier-admin@everp.com
             "supplier-admin@everp.com",
             "공급사 관리자",
             "010-8000-0001",
