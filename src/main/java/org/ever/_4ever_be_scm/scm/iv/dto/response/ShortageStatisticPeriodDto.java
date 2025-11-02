@@ -13,10 +13,10 @@ public class ShortageStatisticPeriodDto {
     /**
      * 주의 단계 총 개수
      */
-    private StatisticValueDto totalWarning;
+    private StatisticValueDto total_warning;
     
     /**
      * 긴급 단계 총 개수
      */
-    private StatisticValueDto totalEmergency;
+    private StatisticValueDto total_emergency;
 }

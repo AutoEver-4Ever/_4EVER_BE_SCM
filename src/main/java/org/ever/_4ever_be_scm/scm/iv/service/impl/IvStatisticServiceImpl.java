@@ -96,13 +96,13 @@ public class IvStatisticServiceImpl implements IvStatisticService {
         long previousUrgentCount = productStockRepository.countByStatusAndUpdatedAtBetween("URGENT", previousStart, previousEnd);
         
         return ShortageStatisticPeriodDto.builder()
-                .totalWarning(StatisticValueDto.builder()
+                .total_warning(StatisticValueDto.builder()
                         .value(currentCautionCount)
-                        .deltaRate(calculateDeltaRate(currentCautionCount, previousCautionCount))
+                        .delta_rate(calculateDeltaRate(currentCautionCount, previousCautionCount))
                         .build())
-                .totalEmergency(StatisticValueDto.builder()
+                .total_emergency(StatisticValueDto.builder()
                         .value(currentUrgentCount)
-                        .deltaRate(calculateDeltaRate(currentUrgentCount, previousUrgentCount))
+                        .delta_rate(calculateDeltaRate(currentUrgentCount, previousUrgentCount))
                         .build())
                 .build();
     }
@@ -144,25 +144,25 @@ public class IvStatisticServiceImpl implements IvStatisticService {
         long[] previousDeliveryData = getPreviousDeliveryMockData(period);
         
         return ImStatisticPeriodDto.builder()
-                .totalStock(StatisticValueDto.builder()
+                .total_stock(StatisticValueDto.builder()
                         .value(currentTotalStock.longValue())
-                        .deltaRate(calculateDeltaRate(currentTotalStock.longValue(), previousTotalStock.longValue()))
+                        .delta_rate(calculateDeltaRate(currentTotalStock.longValue(), previousTotalStock.longValue()))
                         .build())
-                .storePending(StatisticValueDto.builder()
+                .store_pending(StatisticValueDto.builder()
                         .value(currentReceivingCount)
-                        .deltaRate(calculateDeltaRate(currentReceivingCount, previousReceivingCount))
+                        .delta_rate(calculateDeltaRate(currentReceivingCount, previousReceivingCount))
                         .build())
-                .storeComplete(StatisticValueDto.builder()
+                .store_complete(StatisticValueDto.builder()
                         .value(currentReceivedCount)
-                        .deltaRate(calculateDeltaRate(currentReceivedCount, previousReceivedCount))
+                        .delta_rate(calculateDeltaRate(currentReceivedCount, previousReceivedCount))
                         .build())
-                .deliveryComplete(StatisticValueDto.builder()
+                .delivery_complete(StatisticValueDto.builder()
                         .value(deliveryData[0])
-                        .deltaRate(calculateDeltaRate(deliveryData[0], previousDeliveryData[0]))
+                        .delta_rate(calculateDeltaRate(deliveryData[0], previousDeliveryData[0]))
                         .build())
-                .deliveryPending(StatisticValueDto.builder()
+                .delivery_pending(StatisticValueDto.builder()
                         .value(deliveryData[1])
-                        .deltaRate(calculateDeltaRate(deliveryData[1], previousDeliveryData[1]))
+                        .delta_rate(calculateDeltaRate(deliveryData[1], previousDeliveryData[1]))
                         .build())
                 .build();
     }
@@ -202,13 +202,13 @@ public class IvStatisticServiceImpl implements IvStatisticService {
         if (previousActiveCount == 0) previousActiveCount = currentActiveCount - 1;
         
         return WarehouseStatisticPeriodDto.builder()
-                .totalWarehouse(StatisticValueDto.builder()
+                .total_warehouse(StatisticValueDto.builder()
                         .value(String.valueOf(currentTotalCount))
-                        .deltaRate(calculateDeltaRate(currentTotalCount, previousTotalCount))
+                        .delta_rate(calculateDeltaRate(currentTotalCount, previousTotalCount))
                         .build())
-                .inOperationWarehouse(StatisticValueDto.builder()
+                .in_operation_warehouse(StatisticValueDto.builder()
                         .value(currentActiveCount)
-                        .deltaRate(calculateDeltaRate(currentActiveCount, previousActiveCount))
+                        .delta_rate(calculateDeltaRate(currentActiveCount, previousActiveCount))
                         .build())
                 .build();
     }

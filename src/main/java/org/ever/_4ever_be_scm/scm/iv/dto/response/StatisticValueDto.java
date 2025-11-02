@@ -20,5 +20,5 @@ public class StatisticValueDto {
     /**
      * 변화율 (delta rate)
      */
-    private BigDecimal deltaRate;
+    private BigDecimal delta_rate;
 }
