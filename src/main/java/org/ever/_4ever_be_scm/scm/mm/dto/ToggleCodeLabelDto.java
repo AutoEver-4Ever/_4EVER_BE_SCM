@@ -6,6 +6,6 @@ import lombok.Data;
 @Data
 @AllArgsConstructor
 public class ToggleCodeLabelDto {
-    private String code;
-    private String label;
+    private String value;
+    private String key;
 }

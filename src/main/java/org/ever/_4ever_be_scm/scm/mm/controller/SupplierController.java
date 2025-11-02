@@ -7,6 +7,7 @@ import org.ever._4ever_be_scm.scm.iv.dto.PagedResponseDto;
 import org.ever._4ever_be_scm.scm.mm.dto.SupplierDetailResponseDto;
 import org.ever._4ever_be_scm.scm.mm.dto.SupplierListResponseDto;
 import org.ever._4ever_be_scm.scm.mm.dto.supplier.SupplierCreateRequestDto;
+import org.ever._4ever_be_scm.scm.mm.dto.supplier.SupplierUpdateRequestDto;
 import org.ever._4ever_be_scm.scm.mm.service.SupplierService;
 import org.ever._4ever_be_scm.scm.mm.vo.SupplierSearchVo;
 import org.ever.event.CreateAuthUserResultEvent;
@@ -58,7 +59,7 @@ public class SupplierController {
         return ResponseEntity.ok(ApiResponse.success(response, "공급업체 목록을 조회했습니다.", HttpStatus.OK));
     }
 
-    @GetMapping("/supplier/{supplierId}")
+    @GetMapping("/{supplierId}")
     public ResponseEntity<ApiResponse<SupplierDetailResponseDto>> getSupplierDetail(
             @PathVariable String supplierId) {
         
@@ -79,5 +80,19 @@ public class SupplierController {
 
         supplierService.createSupplier(requestDto, deferredResult);
         return deferredResult;
+    }
+
+    @PatchMapping("/{supplierId}")
+    @io.swagger.v3.oas.annotations.Operation(
+            summary = "공급업체 수정",
+            description = "공급업체 정보를 부분 수정합니다. null이 아닌 필드만 업데이트됩니다."
+    )
+    public ResponseEntity<ApiResponse<Void>> updateSupplier(
+            @PathVariable String supplierId,
+            @RequestBody SupplierUpdateRequestDto requestDto) {
+        
+        supplierService.updateSupplier(supplierId, requestDto);
+        
+        return ResponseEntity.ok(ApiResponse.success(null, "공급업체 정보가 수정되었습니다.", HttpStatus.OK));
     }
 }
