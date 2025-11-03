@@ -15,6 +15,7 @@ import org.ever._4ever_be_scm.scm.iv.repository.SupplierUserRepository;
 import org.ever._4ever_be_scm.scm.mm.dto.SupplierDetailResponseDto;
 import org.ever._4ever_be_scm.scm.mm.dto.SupplierListResponseDto;
 import org.ever._4ever_be_scm.scm.mm.dto.supplier.SupplierCreateRequestDto;
+import org.ever._4ever_be_scm.scm.mm.dto.supplier.SupplierUpdateRequestDto;
 import org.ever._4ever_be_scm.scm.mm.integration.port.SupplierUserServicePort;
 import org.ever._4ever_be_scm.scm.mm.service.SupplierService;
 import org.ever._4ever_be_scm.scm.mm.service.model.SupplierCreationResult;
@@ -89,7 +90,6 @@ public class SupplierServiceImpl implements SupplierService {
             }
 
             dtoList.add(SupplierListResponseDto.builder()
-                .statusCode(status)
                 .supplierInfo(SupplierListResponseDto.SupplierInfoDto.builder()
                     .supplierId(supplierCompany.getId())
                     .supplierName(supplierCompany.getCompanyName())
@@ -203,6 +203,54 @@ public class SupplierServiceImpl implements SupplierService {
                 throw error;
             }
         });
+    }
+
+    @Override
+    @Transactional
+    public void updateSupplier(String supplierId, SupplierUpdateRequestDto dto) {
+        // 1. SupplierCompany 조회 및 수정
+        SupplierCompany existingCompany = supplierCompanyRepository.findById(supplierId)
+                .orElseThrow(() -> new IllegalArgumentException("공급업체를 찾을 수 없습니다: " + supplierId));
+        
+        // 2. 기존 값을 기반으로 새로운 SupplierCompany 빌드 (null이 아닌 값만 업데이트)
+        SupplierCompany.SupplierCompanyBuilder builder = SupplierCompany.builder()
+                .id(existingCompany.getId())
+                .companyCode(existingCompany.getCompanyCode())
+                .companyName(dto.getSupplierName() != null ? dto.getSupplierName() : existingCompany.getCompanyName())
+                .category(dto.getCategory() != null ? dto.getCategory() : existingCompany.getCategory())
+                .status(dto.getStatusCode() != null ? dto.getStatusCode() : existingCompany.getStatus())
+                .baseAddress(dto.getSupplierBaseAddress() != null ? dto.getSupplierBaseAddress() : existingCompany.getBaseAddress())
+                .detailAddress(dto.getSupplierDetailAddress() != null ? dto.getSupplierDetailAddress() : existingCompany.getDetailAddress()) // 상세주소는 기존값 유지
+                .officePhone(dto.getSupplierPhone() != null ? dto.getSupplierPhone() : existingCompany.getOfficePhone())
+                .deliveryDays(dto.getDeliverLeadTime() != null ? dto.getDeliverLeadTime() : existingCompany.getDeliveryDays())
+                .supplierUser(existingCompany.getSupplierUser()); // 기존 연관관계 유지
+        
+        // 추가 필드들이 엔티티에 있다면 여기서 설정
+
+        SupplierCompany updatedCompany = builder.build();
+        
+        // SupplierCompany 저장
+        supplierCompanyRepository.save(updatedCompany);
+        
+        // 3. SupplierUser 조회 및 수정 (연관된 사용자가 있는 경우)
+        if (existingCompany.getSupplierUser() != null) {
+            SupplierUser existingUser = existingCompany.getSupplierUser();
+            
+            // 기존 값을 기반으로 새로운 SupplierUser 빌드
+            SupplierUser.SupplierUserBuilder userBuilder = SupplierUser.builder()
+                    .id(existingUser.getId())
+                    .userId(existingUser.getUserId())
+                    .supplierUserName(dto.getManagerName() != null ? dto.getManagerName() : existingUser.getSupplierUserName())
+                    .supplierUserEmail(dto.getManagerPhone() != null ? dto.getManagerPhone() : existingUser.getSupplierUserEmail())
+                    .supplierUserPhoneNumber(dto.getSupplierPhone() != null ? dto.getSupplierPhone() : existingUser.getSupplierUserPhoneNumber());
+            
+            // 추가 필드들이 엔티티에 있다면 여기서 설정 (department, position 등)
+            
+            SupplierUser updatedUser = userBuilder.build();
+            
+            // SupplierUser 저장
+            supplierUserRepository.save(updatedUser);
+        }
     }
 
     private SupplierCreationResult saveSupplier(SupplierCreateRequestDto dto, String externalUserId) {

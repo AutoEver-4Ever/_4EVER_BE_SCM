@@ -70,7 +70,6 @@ public class PurchaseRequisitionController {
         // DTO to VO 변환
         PurchaseRequisitionCreateVo createVo = PurchaseRequisitionCreateVo.builder()
                 .requesterId(requesterId)
-                .requesterId(requesterId)
                 .items(requestDto.getItems().stream()
                         .map(item -> PurchaseRequisitionCreateVo.ItemVo.builder()
                                 .itemName(item.getItemName())

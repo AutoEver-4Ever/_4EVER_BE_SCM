@@ -8,6 +8,7 @@ import org.ever._4ever_be_scm.scm.iv.dto.PurchaseOrderDto;
 import org.ever._4ever_be_scm.scm.iv.service.PurchaseOrdersService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -63,16 +64,12 @@ public class PurchaseOrdersController {
     public ResponseEntity<ApiResponse<PagedResponseDto<PurchaseOrderDto>>> getReceivedPurchaseOrders(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) String startDate,
-            @RequestParam(required = false) String endDate) {
-        
-        // 날짜 파라미터 변환
-        LocalDate start = startDate != null ? LocalDate.parse(startDate) : null;
-        LocalDate end = endDate != null ? LocalDate.parse(endDate) : null;
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         
         // 서비스 호출 - DELIVERED 상태만 조회, dueDate 기준 필터링
         Page<PurchaseOrderDto> purchaseOrdersPage = purchaseOrderService.getReceivedPurchaseOrders(
-                PageRequest.of(page, size), start, end);
+                PageRequest.of(page, size), startDate, endDate);
         PagedResponseDto<PurchaseOrderDto> response = PagedResponseDto.from(purchaseOrdersPage);
         
         return ResponseEntity.ok(ApiResponse.success(response, "입고 완료 목록을 조회했습니다.", HttpStatus.OK));

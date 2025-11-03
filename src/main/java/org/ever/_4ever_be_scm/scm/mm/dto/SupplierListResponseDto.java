@@ -10,7 +10,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class SupplierListResponseDto {
-    private String statusCode;
     private SupplierInfoDto supplierInfo;
 
     @Data

@@ -13,10 +13,10 @@ public class WarehouseStatisticPeriodDto {
     /**
      * 총 창고 개수
      */
-    private StatisticValueDto totalWarehouse;
+    private StatisticValueDto total_warehouse;
     
     /**
      * 운영중인 창고 개수
      */
-    private StatisticValueDto inOperationWarehouse;
+    private StatisticValueDto in_operation_warehouse;
 }

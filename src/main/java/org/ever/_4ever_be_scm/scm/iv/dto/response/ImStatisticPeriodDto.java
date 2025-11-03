@@ -13,25 +13,25 @@ public class ImStatisticPeriodDto {
     /**
      * 총 재고 가치
      */
-    private StatisticValueDto totalStock;
+    private StatisticValueDto total_stock;
     
     /**
      * 입고 대기
      */
-    private StatisticValueDto storePending;
+    private StatisticValueDto store_pending;
     
     /**
      * 입고 완료
      */
-    private StatisticValueDto storeComplete;
+    private StatisticValueDto store_complete;
     
     /**
      * 출고 완료
      */
-    private StatisticValueDto deliveryComplete;
+    private StatisticValueDto delivery_complete;
     
     /**
      * 출고 준비완료
      */
-    private StatisticValueDto deliveryPending;
+    private StatisticValueDto delivery_pending;
 }

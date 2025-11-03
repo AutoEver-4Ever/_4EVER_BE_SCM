@@ -61,7 +61,7 @@ public class SalesOrderController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         
-        // 서비스 호출 - READY_TO_SHIP 상태만 조회
+        // 서비스 호출 - READY_FOR_SHIPMENT 상태만 조회
         Page<SalesOrderDto> salesOrdersPage = salesOrderService.getReadyToShipSalesOrders(PageRequest.of(page, size));
         PagedResponseDto<SalesOrderDto> response = PagedResponseDto.from(salesOrdersPage);
         
