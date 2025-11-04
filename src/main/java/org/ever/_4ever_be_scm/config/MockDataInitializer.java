@@ -419,12 +419,12 @@ public class MockDataInitializer {
         List<MrpRun> mrpRuns = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
             MrpRun run = MrpRun.builder()
-                    .mrpResultId(mrps.get(i).getId())
-                    .count(20 + i * 5)
+                    .productId(mrps.get(i).getProductId())
+                    .quantity(BigDecimal.valueOf(20 + i * 5))
                     .quotationId("quot-run-" + (i + 1))
                     .procurementStart(LocalDate.now().plusDays(i + 1))
                     .expectedArrival(LocalDate.now().plusDays(8 + i))
-                    .status(i % 2 == 0 ? "SUCCESS" : "PENDING")
+                    .status(i % 2 == 0 ? "APPROVAL" : "PENDING")
                     .build();
             mrpRuns.add(run);
         }

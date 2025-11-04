@@ -9,4 +9,5 @@ import java.util.Optional;
 public interface MpsRepository extends JpaRepository<Mps, String> {
     Optional<Mps> findByQuotationId(String quotationId);
     List<Mps> findByQuotationIdIn(List<String> quotationIds);
+    List<Mps> findByBomId(String bomId);
 }
