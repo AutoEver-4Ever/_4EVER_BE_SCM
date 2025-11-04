@@ -38,7 +38,7 @@ public class BomServiceImpl implements BomService {
         String productCode = "ITM-" + uuid.substring(uuid.length() - 6);
         Product product = Product.builder()
                 .productCode(productCode)
-                .category("PRODUCT")
+                .category("ITEM")
                 .productName(requestDto.getProductName())
                 .unit(requestDto.getUnit())
                 .build();
@@ -70,14 +70,14 @@ public class BomServiceImpl implements BomService {
             BigDecimal originPrice = BigDecimal.ZERO;
             BigDecimal deliveryDays = BigDecimal.ZERO;
 
-            if ("ITEM".equals(componentType)) {
+            if ("MATERIAL".equals(componentType)) {
                 // 원자재: 가격, 납기 supplier에서 조회
                 if (componentProduct.getOriginPrice() != null) originPrice = componentProduct.getOriginPrice();
                 if (componentProduct.getSupplierCompany() != null) {
                     SupplierCompany supplier = componentProduct.getSupplierCompany();
                     if (supplier.getDeliveryDays() != null) deliveryDays = BigDecimal.valueOf(supplier.getDeliveryDays());
                 }
-            } else if ("PRODUCT".equals(componentType)) {
+            } else if ("ITEM".equals(componentType)) {
                 // 완제품(BOM): 가격, 리드타임 BOM에서 조회
                 Optional<Bom>subBomOpt = bomRepository.findByProductId(productId);
                 if (subBomOpt.isPresent()) {
@@ -178,14 +178,14 @@ public class BomServiceImpl implements BomService {
             BigDecimal originPrice = BigDecimal.ZERO;
             BigDecimal deliveryDays = BigDecimal.ZERO;
 
-            if ("ITEM".equals(componentType)) {
+            if ("MATERIAL".equals(componentType)) {
                 // 원자재: 가격, 납기 supplier에서 조회
                 if (componentProduct.getOriginPrice() != null) originPrice = componentProduct.getOriginPrice();
                 if (componentProduct.getSupplierCompany() != null) {
                     SupplierCompany supplier = componentProduct.getSupplierCompany();
                     if (supplier.getDeliveryDays() != null) deliveryDays = BigDecimal.valueOf(supplier.getDeliveryDays());
                 }
-            } else if ("PRODUCT".equals(componentType)) {
+            } else if ("ITEM".equals(componentType)) {
                 // 완제품(BOM): 가격, 리드타임 BOM에서 조회
                 Optional<Bom>subBomOpt = bomRepository.findByProductId(productId);
                 if (subBomOpt.isPresent()) {
@@ -291,7 +291,7 @@ public class BomServiceImpl implements BomService {
             int parentQuantity = bomItem.getCount().intValue();
             int parentLevel = exp.getLevel();
             String levelStr = "Level " + parentLevel;
-            if ("PRODUCT".equals(bomItem.getComponentType())) {
+            if ("ITEM".equals(bomItem.getComponentType())) {
                 BomDetailResponseDto subBomDetail = getBomDetail(bomItem.getComponentId());
                 if (subBomDetail != null) {
                     components.add(BomDetailResponseDto.BomComponentDto.builder()

@@ -17,7 +17,7 @@ COPY src src
 # 테스트 포함하여 빌드
 RUN ./gradlew clean build test --no-daemon
 
-FROM openjdk:17-slim
+FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
 # 비-root 사용자 생성 (보안 강화)

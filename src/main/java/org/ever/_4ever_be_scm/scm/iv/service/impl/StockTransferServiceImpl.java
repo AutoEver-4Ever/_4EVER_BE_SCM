@@ -58,9 +58,11 @@ public class StockTransferServiceImpl implements StockTransferService {
         ProductStock currentStock = productStockRepository.findByProductId(request.getItemId())
                 .orElseThrow(() -> new RuntimeException("해당 제품의 재고를 찾을 수 없습니다."));
 
-
-        if (currentStock.getAvailableCount().compareTo(request.getStockQuantity()) != 0) {
-            throw new RuntimeException("이동할 수량은 현재 재고 수량과 동일해야 합니다.");
+        // 재고 이동 시 예약재고를 제외한 실제 가용재고로 체크
+        BigDecimal actualAvailable = currentStock.getActualAvailableCount();
+        if (actualAvailable.compareTo(request.getStockQuantity()) < 0) {
+            throw new RuntimeException(String.format("이동할 수량이 실제 가용재고보다 많습니다. (요청: %s, 가용: %s, 예약재고: %s)",
+                request.getStockQuantity(), actualAvailable, currentStock.getReservedCount()));
         }
 
         
@@ -79,7 +81,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         Warehouse toWarehouse = warehouseRepository.findById(request.getToWarehouseId())
                 .orElseThrow(() -> new RuntimeException("도착 창고를 찾을 수 없습니다."));
         
-        // 4. ProductStock의 창고 변경
+        // 4. ProductStock의 창고 변경 (예약재고 정보 유지)
         BigDecimal previousCount = currentStock.getAvailableCount();
         currentStock = ProductStock.builder()
                 .id(currentStock.getId())
@@ -87,9 +89,10 @@ public class StockTransferServiceImpl implements StockTransferService {
                 .warehouse(toWarehouse) // 창고 변경
                 .availableCount(currentStock.getAvailableCount())
                 .safetyCount(currentStock.getSafetyCount())
+                .reservedCount(currentStock.getReservedCount()) // 예약재고 정보 유지
                 .status(currentStock.getStatus())
                 .build();
-        
+
         productStockRepository.save(currentStock);
         
         // 5. ProductStockLog 생성
@@ -143,8 +146,11 @@ public class StockTransferServiceImpl implements StockTransferService {
         } else {
             // 출고 (quantity < 0)
             BigDecimal absQuantity = request.getQuantity().abs();
-            if (currentStock.getAvailableCount().compareTo(absQuantity) < 0) {
-                throw new RuntimeException("출고할 수량이 현재 재고보다 많습니다.");
+            // 예약재고를 제외한 실제 가용재고로 체크
+            BigDecimal actualAvailable = currentStock.getActualAvailableCount();
+            if (actualAvailable.compareTo(absQuantity) < 0) {
+                throw new RuntimeException(String.format("출고할 수량이 실제 가용재고보다 많습니다. (요청: %s, 가용: %s, 예약재고: %s)", 
+                    absQuantity, actualAvailable, currentStock.getReservedCount()));
             }
             newTotalCount = currentStock.getAvailableCount().subtract(absQuantity);
             newAvailableCount = currentStock.getAvailableCount().subtract(absQuantity);
@@ -154,13 +160,14 @@ public class StockTransferServiceImpl implements StockTransferService {
 
         String status = calculateStatus(newAvailableCount.intValue(),currentStock.getSafetyCount().intValue());
         
-        // 4. ProductStock 업데이트
+        // 4. ProductStock 업데이트 (예약재고 정보 유지)
         ProductStock updatedStock = ProductStock.builder()
                 .id(currentStock.getId())
                 .product(currentStock.getProduct())
                 .warehouse(currentStock.getWarehouse())
                 .availableCount(newAvailableCount)
                 .safetyCount(currentStock.getSafetyCount())
+                .reservedCount(currentStock.getReservedCount()) // 예약재고 정보 유지
                 .status(status)
                 .build();
         

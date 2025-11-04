@@ -20,7 +20,7 @@ COPY src src
 # 테스트 제외하고 빌드
 RUN ./gradlew clean build -x test
 
-FROM openjdk:17-slim
+FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
 # curl 설치 (healthcheck용)

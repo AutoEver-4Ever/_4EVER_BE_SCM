@@ -122,7 +122,7 @@ public class ExternalApiController {
     }
 
     /**
-     * 8. supplierUserId로 supplierCompanyId return해줘
+     * 8. supplierUserId로 supplierCompanyId return
      */
 
     @PostMapping("/company/supplier")

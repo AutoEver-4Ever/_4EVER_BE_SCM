@@ -36,7 +36,7 @@ public class MMStatisticsController {
     @GetMapping("/purchase-requisition/status/toggle")
     public ApiResponse<List<ToggleCodeLabelDto>> getPurchaseRequisitionStatusToggle() {
         List<ToggleCodeLabelDto> list = List.of(
-            new ToggleCodeLabelDto("전체", "ALL"),
+            new ToggleCodeLabelDto("전체 상태", "ALL"),
             new ToggleCodeLabelDto("승인", "APPROVAL"),
             new ToggleCodeLabelDto("대기", "PENDING"),
             new ToggleCodeLabelDto("반려", "REJECTED")
@@ -57,7 +57,7 @@ public class MMStatisticsController {
     @GetMapping("/purchase-orders/status/toggle")
     public ApiResponse<List<ToggleCodeLabelDto>> getPurchaseOrderStatusToggle() {
         List<ToggleCodeLabelDto> list = List.of(
-            new ToggleCodeLabelDto("전체", "ALL"),
+            new ToggleCodeLabelDto("전체 상태", "ALL"),
             new ToggleCodeLabelDto("승인", "APPROVAL"),
             new ToggleCodeLabelDto("대기", "PENDING"),
             new ToggleCodeLabelDto("반려", "REJECTED"),
@@ -79,7 +79,7 @@ public class MMStatisticsController {
     @GetMapping("/supplier/status/toggle")
     public ApiResponse<List<ToggleCodeLabelDto>> getSupplierStatusToggle() {
         List<ToggleCodeLabelDto> list = List.of(
-            new ToggleCodeLabelDto("전체", "ALL"),
+            new ToggleCodeLabelDto("전체 상태", "ALL"),
             new ToggleCodeLabelDto("활성", "ACTIVE"),
             new ToggleCodeLabelDto("비활성", "INACTIVE")
         );
@@ -89,7 +89,7 @@ public class MMStatisticsController {
     @GetMapping("/supplier/category/toggle")
     public ApiResponse<List<ToggleCodeLabelDto>> getSupplierCategoryToggle() {
         List<ToggleCodeLabelDto> list = List.of(
-            new ToggleCodeLabelDto("전체", "ALL"),
+            new ToggleCodeLabelDto("전체 카테고리", "ALL"),
             new ToggleCodeLabelDto("자재", "MATERIAL"),
             new ToggleCodeLabelDto("품목", "ITEM"),
             new ToggleCodeLabelDto("기타", "ETC")
