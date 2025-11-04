@@ -119,7 +119,6 @@ public class SupplierServiceImpl implements SupplierService {
         SupplierUser supplierUser = supplierCompany.getSupplierUser();
 
         return SupplierDetailResponseDto.builder()
-            .statusCode(status)
             .supplierInfo(SupplierDetailResponseDto.SupplierInfoDto.builder()
                 .supplierId(supplierCompany.getId())
                 .supplierName(supplierCompany.getCompanyName())
@@ -128,7 +127,7 @@ public class SupplierServiceImpl implements SupplierService {
                 .supplierPhone(supplierCompany.getOfficePhone())
                 .supplierBaseAddress(supplierCompany.getBaseAddress())
                 .supplierDetailAddress(supplierCompany.getDetailAddress())
-                .supplierStatus(status)
+                .supplierStatusCode(status)
                 .category(category)
                 .deliveryLeadTime(supplierCompany.getDeliveryDays())
                 .build())
@@ -218,7 +217,7 @@ public class SupplierServiceImpl implements SupplierService {
                 .companyCode(existingCompany.getCompanyCode())
                 .companyName(dto.getSupplierName() != null ? dto.getSupplierName() : existingCompany.getCompanyName())
                 .category(dto.getCategory() != null ? dto.getCategory() : existingCompany.getCategory())
-                .status(dto.getStatusCode() != null ? dto.getStatusCode() : existingCompany.getStatus())
+                .status(dto.getSupplierStatusCode() != null ? dto.getSupplierStatusCode() : existingCompany.getStatus())
                 .baseAddress(dto.getSupplierBaseAddress() != null ? dto.getSupplierBaseAddress() : existingCompany.getBaseAddress())
                 .detailAddress(dto.getSupplierDetailAddress() != null ? dto.getSupplierDetailAddress() : existingCompany.getDetailAddress()) // 상세주소는 기존값 유지
                 .officePhone(dto.getSupplierPhone() != null ? dto.getSupplierPhone() : existingCompany.getOfficePhone())

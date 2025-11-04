@@ -10,7 +10,6 @@ import org.ever._4ever_be_scm.scm.mm.dto.PurchaseOrderListResponseDto;
 import org.ever._4ever_be_scm.scm.mm.entity.ProductOrder;
 import org.ever._4ever_be_scm.scm.mm.entity.ProductOrderApproval;
 import org.ever._4ever_be_scm.scm.mm.entity.ProductOrderItem;
-import org.ever._4ever_be_scm.scm.mm.entity.ProductRequestApproval;
 import org.ever._4ever_be_scm.scm.mm.repository.ProductOrderApprovalRepository;
 import org.ever._4ever_be_scm.scm.mm.repository.ProductOrderItemRepository;
 import org.ever._4ever_be_scm.scm.mm.repository.ProductOrderRepository;
@@ -22,13 +21,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -56,6 +53,20 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         List<ProductOrder> allOrders = productOrderRepository.findAll();
         List<ProductOrder> filteredOrders = allOrders.stream()
                 .filter(order -> {
+                    // statusCode 필터링
+                    String statusCode = searchVo.getStatusCode();
+                    if (statusCode != null && !"ALL".equalsIgnoreCase(statusCode)) {
+                        String orderStatusCode = order.getApprovalId() != null 
+                            ? order.getApprovalId().getApprovalStatus() 
+                            : "PENDING";
+                        if (orderStatusCode == null) {
+                            orderStatusCode = "PENDING";
+                        }
+                        if (!statusCode.equalsIgnoreCase(orderStatusCode)) {
+                            return false;
+                        }
+                    }
+                    
                     // type/keyword 필터링
                     String type = searchVo.getType();
                     String keyword = searchVo.getKeyword();

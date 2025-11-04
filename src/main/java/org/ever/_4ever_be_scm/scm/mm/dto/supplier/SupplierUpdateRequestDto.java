@@ -20,7 +20,7 @@ public class SupplierUpdateRequestDto {
     private String supplierBaseAddress;
     private String supplierDetailAddress;
     private String category;
-    private String statusCode;
+    private String supplierStatusCode;
     private Integer deliverLeadTime;
     
     // SupplierUser 관련 필드들

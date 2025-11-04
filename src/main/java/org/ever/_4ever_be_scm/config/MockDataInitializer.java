@@ -218,7 +218,7 @@ public class MockDataInitializer {
         List<ProductOrderApproval> orderApprovals = new ArrayList<>();
         for (int i = 1; i <= 5; i++) {
             ProductOrderApproval approval = ProductOrderApproval.builder()
-                    .approvalStatus(i % 2 == 1 ? "APPROVED" : "PENDING")
+                    .approvalStatus(i % 2 == 1 ? "APPROVAL" : "PENDING")
                     .approvedBy("internel" + (i-1))
                     .approvedAt(LocalDateTime.now().minusDays(i))
                     .rejectedReason(i % 2 == 0 ? "검토 필요" : null)
@@ -276,7 +276,7 @@ public class MockDataInitializer {
         List<ProductRequestApproval> requestApprovals = new ArrayList<>();
         for (int i = 1; i <= 5; i++) {
             ProductRequestApproval approval = ProductRequestApproval.builder()
-                    .approvalStatus(i % 2 == 1 ? "APPROVED" : "PENDING")
+                    .approvalStatus(i % 2 == 1 ? "APPROVAL" : "PENDING")
                     .approvedBy("internel" + (i-1))
                     .approvedAt(LocalDateTime.now().minusDays(i))
                     .rejectedReason(i % 2 == 0 ? "추가 검토 필요" : null)

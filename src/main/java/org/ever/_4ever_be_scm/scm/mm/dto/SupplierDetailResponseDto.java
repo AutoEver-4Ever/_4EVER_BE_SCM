@@ -10,7 +10,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class SupplierDetailResponseDto {
-    private String statusCode;
     private SupplierInfoDto supplierInfo;
     private ManagerInfoDto managerInfo;
 
@@ -26,7 +25,7 @@ public class SupplierDetailResponseDto {
         private String supplierPhone;
         private String supplierBaseAddress;
         private String supplierDetailAddress;
-        private String supplierStatus;
+        private String supplierStatusCode;
         private String category;
         private Integer deliveryLeadTime;
     }
