@@ -3,6 +3,8 @@ package org.ever._4ever_be_scm.scm.pp.service;
 import org.ever._4ever_be_scm.common.response.ApiResponse;
 import org.ever._4ever_be_scm.scm.pp.dto.MesDetailResponseDto;
 import org.ever._4ever_be_scm.scm.pp.dto.MesQueryResponseDto;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.context.request.async.DeferredResult;
 
@@ -11,7 +13,7 @@ public interface MesService {
     /**
      * MES 목록 조회
      */
-    MesQueryResponseDto getMesList(String quotationId, String status, int page, int size);
+    Page<MesQueryResponseDto.MesItemDto> getMesList(String quotationId, String status, Pageable pageable);
 
     /**
      * MES 상세 조회

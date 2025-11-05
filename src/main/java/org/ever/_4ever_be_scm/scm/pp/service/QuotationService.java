@@ -1,6 +1,7 @@
 package org.ever._4ever_be_scm.scm.pp.service;
 
 import org.ever._4ever_be_scm.common.response.ApiResponse;
+import org.ever._4ever_be_scm.scm.mm.dto.ToggleCodeLabelDto;
 import org.ever._4ever_be_scm.scm.pp.dto.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,6 +18,7 @@ public interface QuotationService {
      */
     QuotationGroupListResponseDto getQuotationList(
             String statusCode,
+            String availableStatus,
             LocalDate startDate,
             LocalDate endDate,
             int page,
@@ -40,5 +42,10 @@ public interface QuotationService {
     /**
      * MRP 조회 (원자재별 그룹핑)
      */
-    MrpQueryResponseDto getMrp(String bomId, String quotationId, String availableStatusCode, int page, int size);
+    org.springframework.data.domain.Page<MrpQueryResponseDto.MrpItemDto> getMrp(String bomId, String quotationId, String availableStatusCode, int page, int size);
+
+    /**
+     * BOM 목록 조회 (bomId와 productName)
+     */
+    List<ToggleCodeLabelDto> getBomList();
 }

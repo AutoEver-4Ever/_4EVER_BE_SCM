@@ -9,4 +9,5 @@ public interface MrpRepository extends JpaRepository<Mrp, String> {
     List<Mrp> findByQuotationId(String quotationId);
     List<Mrp> findByQuotationIdIn(List<String> quotationIds);
     List<Mrp> findByBomId(String bomId);
+    List<Mrp> findByQuotationIdAndProductId(String quotationId, String productId);
 }

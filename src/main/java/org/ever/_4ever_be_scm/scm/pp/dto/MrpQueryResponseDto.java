@@ -34,12 +34,13 @@ public class MrpQueryResponseDto {
     @AllArgsConstructor
     @Builder
     public static class MrpItemDto {
+        private String quotationId;             // 견적 ID (견적별 그룹화)
         private String itemId;
         private String itemName;
         private Integer requiredQuantity;
         private Integer currentStock;           // 물리적 재고 (availableCount)
-        private Integer reservedStock;          // 예약된 재고 (reservedCount) - 추가!
-        private Integer actualAvailableStock;   // 실제 사용 가능 재고 (currentStock - reservedStock) - 추가!
+        private Integer reservedStock;          // 예약된 재고 (reservedCount)
+        private Integer actualAvailableStock;   // 실제 사용 가능 재고 (currentStock - reservedStock)
         private Integer safetyStock;
         private Integer availableStock;
         private String availableStatusCode; // "SUFFICIENT", "INSUFFICIENT"

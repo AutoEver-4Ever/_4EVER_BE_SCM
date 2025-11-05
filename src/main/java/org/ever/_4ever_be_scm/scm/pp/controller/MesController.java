@@ -3,9 +3,12 @@ package org.ever._4ever_be_scm.scm.pp.controller;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.ever._4ever_be_scm.common.response.ApiResponse;
+import org.ever._4ever_be_scm.scm.iv.dto.PagedResponseDto;
 import org.ever._4ever_be_scm.scm.pp.dto.MesDetailResponseDto;
 import org.ever._4ever_be_scm.scm.pp.dto.MesQueryResponseDto;
 import org.ever._4ever_be_scm.scm.pp.service.MesService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -27,7 +30,7 @@ public class MesController {
             summary = "MES 목록 조회",
             description = "작업 지시(MES) 목록을 조회합니다. 견적ID와 상태로 필터링할 수 있습니다."
     )
-    public ResponseEntity<ApiResponse<MesQueryResponseDto>> getMesList(
+    public ResponseEntity<ApiResponse<PagedResponseDto<MesQueryResponseDto.MesItemDto>>> getMesList(
             @io.swagger.v3.oas.annotations.Parameter(description = "견적 ID (선택)")
             @RequestParam(required = false) String quotationId,
             @io.swagger.v3.oas.annotations.Parameter(description = "상태 (ALL, PENDING, IN_PROGRESS, COMPLETED)")
@@ -37,9 +40,10 @@ public class MesController {
             @io.swagger.v3.oas.annotations.Parameter(description = "페이지 크기")
             @RequestParam(defaultValue = "20") int size) {
 
-        MesQueryResponseDto result = mesService.getMesList(quotationId, status, page, size);
+        Page<MesQueryResponseDto.MesItemDto> mesList = mesService.getMesList(quotationId, status, PageRequest.of(page, size));
+        PagedResponseDto<MesQueryResponseDto.MesItemDto> response = PagedResponseDto.from(mesList);
 
-        return ResponseEntity.ok(ApiResponse.success(result, "성공적으로 조회했습니다.", HttpStatus.OK));
+        return ResponseEntity.ok(ApiResponse.success(response, "MES 목록 조회에 성공했습니다.", HttpStatus.OK));
     }
 
     /**

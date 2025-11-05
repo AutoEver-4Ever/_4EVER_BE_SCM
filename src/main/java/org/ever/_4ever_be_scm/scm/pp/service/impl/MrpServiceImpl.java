@@ -228,6 +228,36 @@ public class MrpServiceImpl implements MrpService {
                     productId, currentAvailable, quantity, stock.getAvailableCount());
         }
 
+        // 3. MRP 상태 업데이트: 해당 견적의 부족분이 모두 입고되었는지 확인
+        String quotationId = mrpRun.getQuotationId();
+        List<Mrp> mrpList = mrpRepository.findByQuotationIdAndProductId(quotationId, productId);
+
+        if (!mrpList.isEmpty()) {
+            Mrp mrp = mrpList.get(0);  // quotationId + productId 조합은 유일
+
+            // 해당 견적+제품의 모든 완료된 MRP Run 조회
+            List<MrpRun> completedRuns = mrpRunRepository
+                    .findByQuotationIdAndProductIdAndStatus(quotationId, productId, "COMPLETED");
+
+            BigDecimal totalArrived = completedRuns.stream()
+                    .map(MrpRun::getQuantity)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal shortage = mrp.getShortageQuantity() != null
+                    ? mrp.getShortageQuantity() : BigDecimal.ZERO;
+
+            // 입고된 양이 부족량 이상이면 SUFFICIENT로 변경
+            if (totalArrived.compareTo(shortage) >= 0) {
+                mrp.setStatus("SUFFICIENT");
+                mrpRepository.save(mrp);
+                log.info("MRP 상태 업데이트: quotationId={}, productId={}, INSUFFICIENT → SUFFICIENT (입고량={}, 부족량={})",
+                        quotationId, productId, totalArrived, shortage);
+            } else {
+                log.info("MRP 상태 유지: quotationId={}, productId={}, status=INSUFFICIENT (입고량={}, 부족량={})",
+                        quotationId, productId, totalArrived, shortage);
+            }
+        }
+
         log.info("MRP 계획주문 입고 완료: mrpRunId={}, status=COMPLETED", mrpRunId);
     }
 }
