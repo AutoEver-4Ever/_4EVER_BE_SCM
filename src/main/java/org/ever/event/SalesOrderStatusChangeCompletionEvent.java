@@ -5,10 +5,9 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
 /**
  * 판매주문 상태 변경 완료 이벤트 (Business -> SCM)
+ * Business에서 상태 변경 완료 후 SCM에 결과 통보
  */
 @Getter
 @Builder
@@ -25,11 +24,6 @@ public class SalesOrderStatusChangeCompletionEvent {
      * 판매 주문 ID
      */
     private String salesOrderId;
-
-    /**
-     * 아이템 ID 리스트
-     */
-    private List<String> itemIds;
 
     /**
      * 성공 여부
