@@ -21,6 +21,7 @@ public class SupplierDetailResponseDto {
         private String supplierId;
         private String supplierName;
         private String supplierNumber;
+        private String businessNumber;
         private String supplierEmail;
         private String supplierPhone;
         private String supplierBaseAddress;

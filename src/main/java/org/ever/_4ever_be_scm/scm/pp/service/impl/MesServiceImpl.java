@@ -2,6 +2,8 @@ package org.ever._4ever_be_scm.scm.pp.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.ever._4ever_be_scm.common.response.ApiResponse;
+import org.ever._4ever_be_scm.infrastructure.kafka.config.KafkaTopicConfig;
 import org.ever._4ever_be_scm.scm.iv.entity.Product;
 import org.ever._4ever_be_scm.scm.iv.entity.ProductStock;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductRepository;
@@ -13,10 +15,15 @@ import org.ever._4ever_be_scm.scm.pp.integration.dto.BusinessQuotationDto;
 import org.ever._4ever_be_scm.scm.pp.integration.port.BusinessQuotationServicePort;
 import org.ever._4ever_be_scm.scm.pp.repository.*;
 import org.ever._4ever_be_scm.scm.pp.service.MesService;
+import org.ever.event.MesCompleteEvent;
+import org.ever.event.MesStartEvent;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.async.DeferredResult;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -41,6 +48,8 @@ public class MesServiceImpl implements MesService {
     private final ProductRepository productRepository;
     private final ProductStockRepository productStockRepository;
     private final BusinessQuotationServicePort businessQuotationServicePort;
+    private final org.ever._4ever_be_scm.infrastructure.kafka.producer.KafkaProducerService kafkaProducerService;
+    private final org.ever._4ever_be_scm.common.async.GenericAsyncResultManager<Void> asyncResultManager;
 
     @Override
     @Transactional(readOnly = true)
@@ -203,28 +212,67 @@ public class MesServiceImpl implements MesService {
 
     @Override
     @Transactional
-    public void startMes(String mesId) {
-        log.info("MES 시작: mesId={}", mesId);
+    public DeferredResult<ResponseEntity<ApiResponse<Void>>> startMesAsync(String mesId) {
+        log.info("MES 비동기 시작: mesId={}", mesId);
 
-        // 1. MES 조회
-        Mes mes = mesRepository.findById(mesId)
-                .orElseThrow(() -> new RuntimeException("MES를 찾을 수 없습니다: " + mesId));
+        // DeferredResult 생성 (타임아웃 30초)
+        DeferredResult<ResponseEntity<ApiResponse<Void>>> deferredResult =
+                new DeferredResult<>(30000L);
 
-        if (!"PENDING".equals(mes.getStatus())) {
-            throw new RuntimeException("PENDING 상태의 MES만 시작할 수 있습니다. 현재 상태: " + mes.getStatus());
+        // 타임아웃 처리
+        deferredResult.onTimeout(() -> {
+            log.warn("MES 시작 처리 타임아웃: mesId={}", mesId);
+            deferredResult.setResult(ResponseEntity
+                    .status(HttpStatus.REQUEST_TIMEOUT)
+                    .body(ApiResponse.fail("처리 시간이 초과되었습니다.", HttpStatus.REQUEST_TIMEOUT)));
+        });
+
+        try {
+            // 1. MES 조회
+            Mes mes = mesRepository.findById(mesId)
+                    .orElseThrow(() -> new RuntimeException("MES를 찾을 수 없습니다: " + mesId));
+
+            if (!"PENDING".equals(mes.getStatus())) {
+                throw new RuntimeException("PENDING 상태의 MES만 시작할 수 있습니다. 현재 상태: " + mes.getStatus());
+            }
+
+            // 2. 자재 검증
+            validateMaterialsAvailability(mes);
+
+            // 3. MES 상태 변경
+            mes.setStatus("IN_PROGRESS");
+            mesRepository.save(mes);
+
+            // 4. 자재 소비
+            consumeMaterials(mes);
+
+            // 5. 트랜잭션 ID 생성 및 DeferredResult 등록
+            String transactionId = java.util.UUID.randomUUID().toString();
+            asyncResultManager.registerResult(transactionId, deferredResult);
+
+            // 6. Business 서버로 Order 상태 변경 이벤트 발행
+            MesStartEvent event = MesStartEvent.builder()
+                    .transactionId(transactionId)
+                    .mesId(mesId)
+                    .quotationId(mes.getQuotationId())
+                    .timestamp(System.currentTimeMillis())
+                    .build();
+
+            kafkaProducerService.sendToTopic(
+                    KafkaTopicConfig.MES_START_TOPIC,
+                    mesId, event);
+
+            log.info("MES 시작 이벤트 발행: transactionId={}, mesId={}, quotationId={}",
+                    transactionId, mesId, mes.getQuotationId());
+
+        } catch (Exception e) {
+            log.error("MES 시작 처리 중 오류 발생: mesId={}", mesId, e);
+            deferredResult.setResult(ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.fail("MES 시작 처리 실패: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR)));
         }
 
-        // 2. 자재가 충분한지 검증 (중요!)
-        validateMaterialsAvailability(mes);
-
-        // 3. MES 상태를 IN_PROGRESS로 변경
-        mes.setStatus("IN_PROGRESS");
-        mesRepository.save(mes);
-
-        // 4. 자재 소비 처리 (BOM의 모든 원자재 소비)
-        consumeMaterials(mes);
-
-        log.info("MES 시작 완료: mesId={}, status=IN_PROGRESS", mesId);
+        return deferredResult;
     }
 
     @Override
@@ -316,44 +364,94 @@ public class MesServiceImpl implements MesService {
 
     @Override
     @Transactional
-    public void completeMes(String mesId) {
-        log.info("MES 완료: mesId={}", mesId);
+    public DeferredResult<ResponseEntity<ApiResponse<Void>>> completeMesAsync(String mesId) {
+        log.info("MES 비동기 완료: mesId={}", mesId);
 
-        // 1. MES 조회
-        Mes mes = mesRepository.findById(mesId)
-                .orElseThrow(() -> new RuntimeException("MES를 찾을 수 없습니다: " + mesId));
+        // DeferredResult 생성 (타임아웃 30초)
+        DeferredResult<ResponseEntity<ApiResponse<Void>>> deferredResult =
+                new DeferredResult<>(30000L);
 
-        if (!"IN_PROGRESS".equals(mes.getStatus())) {
-            throw new RuntimeException("IN_PROGRESS 상태의 MES만 완료할 수 있습니다. 현재 상태: " + mes.getStatus());
+        // 타임아웃 처리
+        deferredResult.onTimeout(() -> {
+            log.warn("MES 완료 처리 타임아웃: mesId={}", mesId);
+            deferredResult.setResult(ResponseEntity
+                    .status(HttpStatus.REQUEST_TIMEOUT)
+                    .body(ApiResponse.fail("처리 시간이 초과되었습니다.", HttpStatus.REQUEST_TIMEOUT)));
+        });
+
+        try {
+            // 1. MES 조회
+            Mes mes = mesRepository.findById(mesId)
+                    .orElseThrow(() -> new RuntimeException("MES를 찾을 수 없습니다: " + mesId));
+
+            if (!"IN_PROGRESS".equals(mes.getStatus())) {
+                throw new RuntimeException("IN_PROGRESS 상태의 MES만 완료할 수 있습니다. 현재 상태: " + mes.getStatus());
+            }
+
+            // 2. 모든 공정 완료 확인
+            List<MesOperationLog> operationLogs = mesOperationLogRepository.findByMesIdOrderBySequenceAsc(mesId);
+            boolean allCompleted = operationLogs.stream()
+                    .allMatch(log -> "COMPLETED".equals(log.getStatus()));
+
+            if (!allCompleted) {
+                throw new RuntimeException("모든 공정이 완료되지 않았습니다.");
+            }
+
+            // 3. MES 상태 변경
+            mes.setStatus("COMPLETED");
+            mes.setProgressRate(100);
+            mesRepository.save(mes);
+
+            // 4. 완제품 재고 증가
+            increaseProductStock(mes);
+
+            // 5. 해당 quotation의 모든 MES가 완료되었는지 확인
+            String quotationId = mes.getQuotationId();
+            List<Mes> allMesForQuotation = mesRepository.findAll().stream()
+                    .filter(m -> m.getQuotationId().equals(quotationId))
+                    .toList();
+
+            boolean allMesCompleted = allMesForQuotation.stream()
+                    .allMatch(m -> "COMPLETED".equals(m.getStatus()) || "SKIP".equals(m.getStatus()));
+
+            log.info("Quotation MES 상태 확인: quotationId={}, 전체MES={}, 완료여부={}",
+                    quotationId, allMesForQuotation.size(), allMesCompleted);
+
+            // 6. 모든 MES가 완료되었다면 Business 서버로 이벤트 발행
+            if (allMesCompleted) {
+                String transactionId = java.util.UUID.randomUUID().toString();
+                asyncResultManager.registerResult(transactionId, deferredResult);
+
+                MesCompleteEvent event = MesCompleteEvent.builder()
+                        .transactionId(transactionId)
+                        .mesId(mesId)
+                        .quotationId(quotationId)
+                        .quantity(mes.getQuantity())
+                        .productId(mes.getProductId())
+                        .timestamp(System.currentTimeMillis())
+                        .build();
+
+                kafkaProducerService.sendToTopic(
+                        KafkaTopicConfig.MES_COMPLETE_TOPIC,
+                        mesId, event);
+
+                log.info("MES 완료 이벤트 발행: transactionId={}, mesId={}, quotationId={}",
+                        transactionId, mesId, quotationId);
+            } else {
+                // 아직 완료되지 않은 MES가 있으면 즉시 성공 응답
+                deferredResult.setResult(ResponseEntity.ok(
+                        ApiResponse.success(
+                                null, "MES가 완료되었습니다. (다른 아이템의 생산이 진행 중입니다)", HttpStatus.OK)));
+            }
+
+        } catch (Exception e) {
+            log.error("MES 완료 처리 중 오류 발생: mesId={}", mesId, e);
+            deferredResult.setResult(ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.fail("MES 완료 처리 실패: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR)));
         }
 
-        // 2. 모든 공정이 완료되었는지 확인
-        List<MesOperationLog> operationLogs = mesOperationLogRepository.findByMesIdOrderBySequenceAsc(mesId);
-        boolean allCompleted = operationLogs.stream()
-                .allMatch(log -> "COMPLETED".equals(log.getStatus()));
-
-        if (!allCompleted) {
-            throw new RuntimeException("모든 공정이 완료되지 않았습니다.");
-        }
-
-        // 3. MES 상태를 COMPLETED로 변경
-        mes.setStatus("COMPLETED");
-        mes.setProgressRate(100);
-        mesRepository.save(mes);
-
-        // 4. 완제품 재고 증가
-        increaseProductStock(mes);
-
-        // /PPtodo: Business 서버로 견적 상태 업데이트 (출고준비완료)
-        // String quotationId = mes.getQuotationId();
-        // try {
-        //     businessQuotationServicePort.updateQuotationStatus(quotationId, "READY_FOR_DELIVERY");
-        //     log.info("견적 상태 업데이트 완료: quotationId={}, status=READY_FOR_DELIVERY", quotationId);
-        // } catch (Exception e) {
-        //     log.error("견적 상태 업데이트 실패: quotationId={}", quotationId, e);
-        // }
-
-        log.info("MES 완료: mesId={}, status=COMPLETED", mesId);
+        return deferredResult;
     }
 
     /**
@@ -399,7 +497,7 @@ public class MesServiceImpl implements MesService {
 
             BigDecimal requiredQuantity = bomItem.getCount().multiply(BigDecimal.valueOf(quantity));
 
-            if ("ITEM".equals(bomItem.getComponentType())) {
+            if ("MATERIAL".equals(bomItem.getComponentType())) {
                 // 원자재: 재고 확인
                 ProductStock stock = productStockRepository.findByProductId(bomItem.getComponentId()).orElse(null);
 
@@ -426,7 +524,7 @@ public class MesServiceImpl implements MesService {
                             bomItem.getComponentId(), requiredQuantity, currentAvailable);
                 }
 
-            } else if ("PRODUCT".equals(bomItem.getComponentType())) {
+            } else if ("ITEM".equals(bomItem.getComponentType())) {
                 // 부품: 하위 BOM 검증
                 Bom childBom = bomRepository.findByProductId(bomItem.getComponentId()).orElse(null);
                 if (childBom != null) {
@@ -471,11 +569,11 @@ public class MesServiceImpl implements MesService {
 
             BigDecimal requiredQuantity = bomItem.getCount().multiply(BigDecimal.valueOf(quantity));
 
-            if ("ITEM".equals(bomItem.getComponentType())) {
+            if ("MATERIAL".equals(bomItem.getComponentType())) {
                 // 원자재: 재고 소비
                 consumeStock(bomItem.getComponentId(), requiredQuantity);
 
-            } else if ("PRODUCT".equals(bomItem.getComponentType())) {
+            } else if ("ITEM".equals(bomItem.getComponentType())) {
                 // 부품: 하위 BOM 탐색
                 Bom childBom = bomRepository.findByProductId(bomItem.getComponentId()).orElse(null);
                 if (childBom != null) {
@@ -505,7 +603,7 @@ public class MesServiceImpl implements MesService {
     }
 
     /**
-     * 완제품 재고 증가 (MES 완료 시)
+     * 출하할 제품 증가
      */
     private void increaseProductStock(Mes mes) {
         log.info("완제품 재고 증가: productId={}, quantity={}", mes.getProductId(), mes.getQuantity());
@@ -518,16 +616,16 @@ public class MesServiceImpl implements MesService {
 
             throw new RuntimeException("재고가 없는 제품입니다.");
         } else {
-            // 재고에 증가
-            BigDecimal currentAvailable = stock.getAvailableCount() != null
-                    ? stock.getAvailableCount()
+            // 재고에 증가 (forShipmentCount 증가)
+            BigDecimal forShipmentCount = stock.getAvailableCount() != null
+                    ? stock.getForShipmentCount()
                     : BigDecimal.ZERO;
 
-            stock.setAvailableCount(currentAvailable.add(BigDecimal.valueOf(mes.getQuantity())));
+            stock.setForShipmentCount(forShipmentCount.add(BigDecimal.valueOf(mes.getQuantity())));
             productStockRepository.save(stock);
 
             log.info("재고 증가 완료: productId={}, 이전={}, 증가={}, 현재={}",
-                    mes.getProductId(), currentAvailable, mes.getQuantity(), stock.getAvailableCount());
+                    mes.getProductId(), forShipmentCount, mes.getQuantity(), stock.getAvailableCount());
         }
     }
 }

@@ -5,6 +5,7 @@ import lombok.*;
 import jakarta.persistence.*;
 import org.ever._4ever_be_scm.common.entity.TimeStamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Entity
@@ -26,5 +27,8 @@ public class Operation extends TimeStamp {
 
     @Column(name = "description")
     private String description;
+
+    @Column(name = "required_time")
+    private BigDecimal requiredTime;
 
 }

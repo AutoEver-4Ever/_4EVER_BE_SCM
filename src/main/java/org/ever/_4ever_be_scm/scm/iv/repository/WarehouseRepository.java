@@ -37,10 +37,18 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, String> {
     
     /**
      * 날짜 범위 내 총 창고 개수 조회
-     * 
+     *
      * @param startDate 시작일
      * @param endDate 종료일
      * @return 총 창고 개수
      */
     long countByCreatedAtBetween(java.time.LocalDateTime startDate, java.time.LocalDateTime endDate);
+
+    /**
+     * 창고 타입으로 첫 번째 창고 조회
+     *
+     * @param warehouseType 창고 타입
+     * @return 해당 타입의 첫 번째 창고
+     */
+    java.util.Optional<Warehouse> findFirstByWarehouseType(String warehouseType);
 }

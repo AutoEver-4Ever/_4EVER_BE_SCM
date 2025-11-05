@@ -56,6 +56,11 @@ public class KafkaProducerServiceImpl implements KafkaProducerService {
         }
     }
 
+    @Override
+    public CompletableFuture<SendResult<String, Object>> sendToTopic(String topic, String key, Object event) {
+        return sendEvent(topic, key, event);
+    }
+
     /**
      * 공통 이벤트 발행 메서드
      */

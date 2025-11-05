@@ -43,6 +43,10 @@ public class ProductStock extends TimeStamp {
     @Builder.Default
     private BigDecimal reservedCount = BigDecimal.ZERO;
 
+
+    @Column(name = "for_shipment_count")
+    private BigDecimal forShipmentCount = BigDecimal.ZERO;
+
     @PrePersist
     public void prePersist() {
         if (id == null) {
@@ -56,6 +60,10 @@ public class ProductStock extends TimeStamp {
 
     public void setAvailableCount(BigDecimal availableCount) {
         this.availableCount = availableCount;
+    }
+
+    public void setForShipmentCount(BigDecimal forShipmentCount) {
+        this.forShipmentCount = forShipmentCount;
     }
     
     /**
@@ -103,6 +111,24 @@ public class ProductStock extends TimeStamp {
         this.availableCount = currentAvailable.subtract(quantity);
         if (this.availableCount.compareTo(BigDecimal.ZERO) < 0) {
             this.availableCount = BigDecimal.ZERO;
+        }
+    }
+
+    /**
+     * 예약된 재고를 실제로 차감
+     */
+    public void consumeReservedForShipmentStock(BigDecimal quantity) {
+        BigDecimal currentReserved = reservedCount != null ? reservedCount : BigDecimal.ZERO;
+        BigDecimal currentForShipmentCount = forShipmentCount != null ? forShipmentCount : BigDecimal.ZERO;
+
+        // 1. 예약된 것 중 실제 사용할 만큼만 해제 (min(요청량, 예약량))
+        BigDecimal reservedToRelease = currentReserved.min(quantity);
+        releaseReservation(reservedToRelease);
+
+        // 2. 실제재고는 전체 요청량 차감
+        this.forShipmentCount = currentForShipmentCount.subtract(quantity);
+        if (this.forShipmentCount.compareTo(BigDecimal.ZERO) < 0) {
+            this.forShipmentCount = BigDecimal.ZERO;
         }
     }
 

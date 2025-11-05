@@ -1,7 +1,10 @@
 package org.ever._4ever_be_scm.scm.pp.service;
 
+import org.ever._4ever_be_scm.common.response.ApiResponse;
 import org.ever._4ever_be_scm.scm.pp.dto.MesDetailResponseDto;
 import org.ever._4ever_be_scm.scm.pp.dto.MesQueryResponseDto;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.context.request.async.DeferredResult;
 
 public interface MesService {
 
@@ -16,9 +19,9 @@ public interface MesService {
     MesDetailResponseDto getMesDetail(String mesId);
 
     /**
-     * MES 시작
+     * MES 시작 (비동기 - 분산 트랜잭션)
      */
-    void startMes(String mesId);
+    DeferredResult<ResponseEntity<ApiResponse<Void>>> startMesAsync(String mesId);
 
     /**
      * 공정 시작
@@ -31,7 +34,7 @@ public interface MesService {
     void completeOperation(String mesId, String operationId);
 
     /**
-     * MES 완료
+     * MES 완료 (비동기 - 분산 트랜잭션)
      */
-    void completeMes(String mesId);
+    DeferredResult<ResponseEntity<ApiResponse<Void>>> completeMesAsync(String mesId);
 }

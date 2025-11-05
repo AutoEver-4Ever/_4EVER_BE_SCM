@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.ever._4ever_be_scm.common.response.ApiResponse;
 import org.ever._4ever_be_scm.scm.iv.dto.PagedResponseDto;
+import org.ever._4ever_be_scm.scm.mm.dto.ToggleCodeLabelDto;
 import org.ever._4ever_be_scm.scm.pp.dto.*;
 import org.ever._4ever_be_scm.scm.pp.service.QuotationService;
 import org.springframework.data.domain.Page;
@@ -12,6 +13,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.async.DeferredResult;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -73,12 +75,10 @@ public class QuotationController {
     }
 
     @PostMapping("/confirm")
-    public ResponseEntity<ApiResponse<Void>> confirmQuotations(
+    public DeferredResult<ResponseEntity<ApiResponse<Void>>> confirmQuotations(
             @RequestBody QuotationConfirmRequestDto requestDto) {
 
-        quotationService.confirmQuotations(requestDto);
-
-        return ResponseEntity.ok(ApiResponse.success(null, "견적 확정 완료", HttpStatus.OK));
+        return quotationService.confirmQuotationsAsync(requestDto);
     }
 
     /**
@@ -129,5 +129,26 @@ public class QuotationController {
         MrpQueryResponseDto mrpData = quotationService.getMrp(bomId, quotationId, availableStatusCode, page, size);
 
         return ResponseEntity.ok(ApiResponse.success(mrpData, "자재 조달 계획을 조회했습니다.", HttpStatus.OK));
+    }
+
+    @GetMapping("/status/toggle")
+    public ApiResponse<List<ToggleCodeLabelDto>> getQuotationsStatusToggle() {
+        List<ToggleCodeLabelDto> list = List.of(
+                new ToggleCodeLabelDto("전체 상태", "ALL"),
+                new ToggleCodeLabelDto("승인", "APPROVAL"),
+                new ToggleCodeLabelDto("검토중", "REVIEW"),
+                new ToggleCodeLabelDto("반려", "REJECTED")
+        );
+        return ApiResponse.success(list, "상태 목록 조회 성공", org.springframework.http.HttpStatus.OK);
+    }
+
+    @GetMapping("/available/status/toggle")
+    public ApiResponse<List<ToggleCodeLabelDto>> getQuotationAvailableStatusToggle() {
+        List<ToggleCodeLabelDto> list = List.of(
+                new ToggleCodeLabelDto("전체 상태", "ALL"),
+                new ToggleCodeLabelDto("확인", "CHECKED"),
+                new ToggleCodeLabelDto("미확인", "UNCHECKED")
+        );
+        return ApiResponse.success(list, "상태 목록 조회 성공", org.springframework.http.HttpStatus.OK);
     }
 }

@@ -6,12 +6,14 @@ import org.ever._4ever_be_scm.common.response.ApiResponse;
 import org.ever._4ever_be_scm.scm.iv.dto.PagedResponseDto;
 import org.ever._4ever_be_scm.scm.iv.dto.SalesOrderDetailDto;
 import org.ever._4ever_be_scm.scm.iv.dto.SalesOrderDto;
+import org.ever._4ever_be_scm.scm.iv.dto.SalesOrderStatusChangeRequestDto;
 import org.ever._4ever_be_scm.scm.iv.service.SalesOrderService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.async.DeferredResult;
 
 /**
  * 판매 주문 관리 컨트롤러
@@ -100,5 +102,20 @@ public class SalesOrderController {
         SalesOrderDetailDto salesOrderDetail = salesOrderService.getProductionDetail(salesOrderId);
 
         return ResponseEntity.ok(ApiResponse.success(salesOrderDetail, "출고 준비 완료 주문 상세를 조회했습니다.", HttpStatus.OK));
+    }
+
+    /**
+     * 출고 준비 완료를 배송중 상태로 변경
+     */
+    @PutMapping("/sales-orders/{salesOrderId}/status")
+    @io.swagger.v3.oas.annotations.Operation(
+            summary = "출고 배송 상태 변경",
+            description = "출고 준비 완료 상태를 배송중 상태로 변경합니다."
+    )
+    public DeferredResult<ResponseEntity<ApiResponse<Void>>> changeSalesOrderStatus(
+            @PathVariable String salesOrderId,
+            @RequestBody SalesOrderStatusChangeRequestDto requestDto) {
+
+        return salesOrderService.changeSalesOrderStatusAsync(salesOrderId, requestDto);
     }
 }

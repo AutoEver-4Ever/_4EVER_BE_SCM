@@ -17,8 +17,8 @@ public interface MesRepository extends JpaRepository<Mes, String> {
     List<Mes> findByQuotationIdIn(List<String> quotationIds);
 
     @Query("SELECT m FROM Mes m WHERE " +
-            "(:quotationId IS NULL OR m.quotationId = :quotationId) AND " +
-            "(:status IS NULL OR :status = 'ALL' OR m.status = :status)")
+            "(:quotationId IS NULL OR :quotationId = '' OR m.quotationId = :quotationId) AND " +
+            "(:status IS NULL OR :status = '' OR :status = 'ALL' OR m.status = :status)")
     Page<Mes> findWithFilters(
             @Param("quotationId") String quotationId,
             @Param("status") String status,

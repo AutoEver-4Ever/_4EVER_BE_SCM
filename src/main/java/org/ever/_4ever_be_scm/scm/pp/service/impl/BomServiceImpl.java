@@ -3,11 +3,17 @@ package org.ever._4ever_be_scm.scm.pp.service.impl;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.ever._4ever_be_scm.scm.iv.entity.Product;
+import org.ever._4ever_be_scm.scm.iv.entity.ProductStock;
 import org.ever._4ever_be_scm.scm.iv.entity.SupplierCompany;
+import org.ever._4ever_be_scm.scm.iv.entity.Warehouse;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductRepository;
+import org.ever._4ever_be_scm.scm.iv.repository.ProductStockRepository;
+import org.ever._4ever_be_scm.scm.iv.repository.WarehouseRepository;
 import org.ever._4ever_be_scm.scm.pp.dto.BomCreateRequestDto;
 import org.ever._4ever_be_scm.scm.pp.dto.BomDetailResponseDto;
 import org.ever._4ever_be_scm.scm.pp.dto.BomListResponseDto;
+import org.ever._4ever_be_scm.scm.pp.dto.ProductMapResponseDto;
+import org.ever._4ever_be_scm.scm.pp.dto.ProductDetailResponseDto;
 import org.ever._4ever_be_scm.scm.pp.entity.*;
 import org.ever._4ever_be_scm.scm.pp.repository.*;
 import org.ever._4ever_be_scm.scm.pp.service.BomService;
@@ -24,6 +30,8 @@ import java.util.*;
 @RequiredArgsConstructor
 public class BomServiceImpl implements BomService {
     private final ProductRepository productRepository;
+    private final ProductStockRepository productStockRepository;
+    private final WarehouseRepository warehouseRepository;
     private final BomRepository bomRepository;
     private final BomItemRepository bomItemRepository;
     private final RoutingRepository routingRepository;
@@ -43,6 +51,21 @@ public class BomServiceImpl implements BomService {
                 .unit(requestDto.getUnit())
                 .build();
         productRepository.save(product);
+
+        // 1-1. ProductStock 생성 및 저장
+        // warehouseType이 "ITEM"인 창고 조회
+        Warehouse warehouse = warehouseRepository.findFirstByWarehouseType("ITEM")
+                .orElseThrow(() -> new RuntimeException("ITEM 타입의 창고를 찾을 수 없습니다."));
+
+        ProductStock productStock = ProductStock.builder()
+                .product(product)
+                .warehouse(warehouse)
+                .status("NORMAL")
+                .availableCount(BigDecimal.ZERO)
+                .safetyCount(BigDecimal.ZERO)
+                .reservedCount(BigDecimal.ZERO)
+                .build();
+        productStockRepository.save(productStock);
 
         // 2. BOM 생성 및 저장
         Bom bom = Bom.builder()
@@ -98,11 +121,16 @@ public class BomServiceImpl implements BomService {
                     .build();
             bomItem = bomItemRepository.save(bomItem);
 
+            // Operation 조회하여 requiredTime 가져오기
+            Operation operation = operationRepository.findById(item.getOperationId())
+                    .orElseThrow(() -> new RuntimeException("Operation을 찾을 수 없습니다: " + item.getOperationId()));
+            BigDecimal operationRequiredTime = operation.getRequiredTime() != null ? operation.getRequiredTime() : BigDecimal.ZERO;
+
             Routing routing = Routing.builder()
                     .bomItemId(bomItem.getId())
                     .operationId(item.getOperationId())
                     .sequence(item.getSequence())
-                    .requiredTime(item.getQuantity())
+                    .requiredTime(operationRequiredTime.intValue())
                     .build();
             routing = routingRepository.save(routing);
 
@@ -110,7 +138,8 @@ public class BomServiceImpl implements BomService {
             if (deliveryDays.compareTo(maxDeliveryDays) > 0) {
                 maxDeliveryDays = deliveryDays;
             }
-            totalRequiredTime = totalRequiredTime.add(BigDecimal.valueOf(item.getQuantity()));
+            // totalRequiredTime =  operation.requiredTime
+            totalRequiredTime = totalRequiredTime.add(operationRequiredTime);
 
             BomExplosion explosion = BomExplosion.builder()
                     .parentBomId(bom.getId())
@@ -125,7 +154,7 @@ public class BomServiceImpl implements BomService {
 
         // 4. lead_time 계산 및 BOM 업데이트
         // requiredTime(시간) -> 일 단위로 환산 (8시간=1일)
-        BigDecimal requiredDays = totalRequiredTime.divide(BigDecimal.valueOf(8), 0, RoundingMode.UP);
+        BigDecimal requiredDays = totalRequiredTime.divide(BigDecimal.valueOf(480), 0, RoundingMode.UP);
         BigDecimal leadTime = requiredDays.add(maxDeliveryDays);
         bom.setLeadTime(leadTime);
         // 5. originPrice/sellingPrice 계산 (하위 품목 합산)
@@ -206,11 +235,16 @@ public class BomServiceImpl implements BomService {
                     .build();
             bomItem = bomItemRepository.save(bomItem);
 
+            // Operation 조회하여 requiredTime 가져오기
+            Operation operation = operationRepository.findById(item.getOperationId())
+                    .orElseThrow(() -> new RuntimeException("Operation을 찾을 수 없습니다: " + item.getOperationId()));
+            BigDecimal operationRequiredTime = operation.getRequiredTime() != null ? operation.getRequiredTime() : BigDecimal.ZERO;
+
             Routing routing = Routing.builder()
                     .bomItemId(bomItem.getId())
                     .operationId(item.getOperationId())
                     .sequence(item.getSequence())
-                    .requiredTime(item.getQuantity())
+                    .requiredTime(operationRequiredTime.intValue())
                     .build();
             routing = routingRepository.save(routing);
 
@@ -218,7 +252,8 @@ public class BomServiceImpl implements BomService {
             if (deliveryDays.compareTo(maxDeliveryDays) > 0) {
                 maxDeliveryDays = deliveryDays;
             }
-            totalRequiredTime = totalRequiredTime.add(BigDecimal.valueOf(item.getQuantity()));
+            // totalRequiredTime = operation.requiredTime
+            totalRequiredTime = totalRequiredTime.add(operationRequiredTime);
 
             BomExplosion explosion = BomExplosion.builder()
                     .parentBomId(bom.getId())
@@ -232,7 +267,7 @@ public class BomServiceImpl implements BomService {
         }
 
         // 6. lead_time 계산 및 BOM 업데이트
-        BigDecimal requiredDays = totalRequiredTime.divide(BigDecimal.valueOf(8), 0, RoundingMode.UP);
+        BigDecimal requiredDays = totalRequiredTime.divide(BigDecimal.valueOf(480), 0, RoundingMode.UP);
         BigDecimal leadTime = requiredDays.add(maxDeliveryDays);
         bom.setLeadTime(leadTime);
         // 7. originPrice/sellingPrice 계산 (하위 품목 합산)
@@ -393,5 +428,51 @@ public class BomServiceImpl implements BomService {
             .levelStructure(levelStructure)
             .routing(sortedRouting)
             .build();
+    }
+
+    @Override
+    public List<ProductMapResponseDto> getProductMap() {
+        List<Product> products = productRepository.findAll();
+
+        return products.stream()
+                .map(product -> ProductMapResponseDto.builder()
+                        .key(product.getId())
+                        .value(product.getProductName())
+                        .build())
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public ProductDetailResponseDto getProductDetail(String productId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new RuntimeException("Product를 찾을 수 없습니다: " + productId));
+
+        String supplierName = null;
+        if (product.getSupplierCompany() != null) {
+            supplierName = product.getSupplierCompany().getCompanyName();
+        }
+
+        return ProductDetailResponseDto.builder()
+                .productId(product.getId())
+                .productName(product.getProductName())
+                .category(product.getCategory())
+                .productNumber(product.getProductCode())
+                .uomName(product.getUnit())
+                .unitPrice(product.getOriginPrice())
+                .supplierName(supplierName)
+                .build();
+    }
+
+    @Override
+    public List<ProductMapResponseDto> getOperationMap() {
+        List<Operation> operations = operationRepository.findAll();
+
+        return operations.stream()
+                .map(operation -> ProductMapResponseDto.builder()
+                        .key(operation.getId())
+                        .value(operation.getOpName())
+                        .build())
+                .toList();
     }
 }

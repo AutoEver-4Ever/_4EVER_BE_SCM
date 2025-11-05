@@ -2,6 +2,7 @@ package org.ever._4ever_be_scm.scm.pp.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.ever._4ever_be_scm.common.response.ApiResponse;
 import org.ever._4ever_be_scm.scm.iv.entity.Product;
 import org.ever._4ever_be_scm.scm.iv.entity.ProductStock;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductRepository;
@@ -14,17 +15,24 @@ import org.ever._4ever_be_scm.scm.pp.integration.dto.BusinessQuotationListRespon
 import org.ever._4ever_be_scm.scm.pp.integration.port.BusinessQuotationServicePort;
 import org.ever._4ever_be_scm.scm.pp.repository.*;
 import org.ever._4ever_be_scm.scm.pp.service.QuotationService;
+import org.ever._4ever_be_scm.infrastructure.kafka.producer.KafkaProducerService;
+import org.ever.event.QuotationUpdateEvent;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.async.DeferredResult;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static org.ever._4ever_be_scm.infrastructure.kafka.config.KafkaTopicConfig.QUOTATION_UPDATE_TOPIC;
 
 @Service
 @RequiredArgsConstructor
@@ -44,6 +52,8 @@ public class QuotationServiceImpl implements QuotationService {
     private final OperationRepository operationRepository;
     private final StockReservationService stockReservationService;
     private final BusinessQuotationServicePort businessQuotationServicePort;
+    private final KafkaProducerService kafkaProducerService;
+    private final org.ever._4ever_be_scm.common.async.GenericAsyncResultManager<Void> asyncResultManager;
 
     @Override
     @Transactional(readOnly = true)
@@ -471,9 +481,12 @@ public class QuotationServiceImpl implements QuotationService {
         log.info("MPS 계산 - 오늘: {}, 리드타임: {}일, 수요발생일: {}, 요청납기: {}",
                 today, leadTimeDays, demandDate, dueDate);
 
+        // 오늘 날짜가 포함된 주의 시작일(월요일) 찾기
+        LocalDate currentWeekStart = getWeekStart(today);
+
         // 현재 주차부터 4주간의 주차 생성
         for (int i = 0; i < 4; i++) {
-            LocalDate weekStart = today.plusWeeks(i);
+            LocalDate weekStart = currentWeekStart.plusWeeks(i);
             LocalDate weekEnd = weekStart.plusDays(6);
             String weekString = getWeekString(weekStart);
 
@@ -509,17 +522,30 @@ public class QuotationServiceImpl implements QuotationService {
         return weeks;
     }
     
-        /**
+    /**
+     * 날짜가 포함된 주의 시작일(월요일) 반환
+     */
+    private LocalDate getWeekStart(LocalDate date) {
+        return date.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
+    }
+
+    /**
      * 날짜를 주차 문자열로 변환 (월-주차 형식)
      */
     private String getWeekString(LocalDate date) {
-        int year = date.getYear();
-        int month = date.getMonthValue();
-        
+        // 해당 날짜가 포함된 주의 월요일을 기준으로 계산
+        LocalDate weekStart = getWeekStart(date);
+        int year = weekStart.getYear();
+        int month = weekStart.getMonthValue();
+
+        // 해당 월의 첫 번째 날의 주 시작일
+        LocalDate firstDayOfMonth = LocalDate.of(year, month, 1);
+        LocalDate firstWeekStart = getWeekStart(firstDayOfMonth);
+
         // 해당 날짜가 몇 번째 주인지 계산
-        int dayOfMonth = date.getDayOfMonth();
-        int weekOfMonth = ((dayOfMonth - 1) / 7) + 1;
-        
+        long weeksBetween = java.time.temporal.ChronoUnit.WEEKS.between(firstWeekStart, weekStart);
+        int weekOfMonth = (int) weeksBetween + 1;
+
         return String.format("%d-%02d-%dW", year, month, weekOfMonth);
     }
 
@@ -536,29 +562,119 @@ public class QuotationServiceImpl implements QuotationService {
                     log.warn("견적을 찾을 수 없습니다: quotationId={}", quotationId);
                     continue;
                 }
-                
-                // 각 아이템별로 MPS/MRP 생성
+
+                // 각 아이템별로 MPS/MRP 생성하고 최대 납기일 추적
+                LocalDate maxConfirmedDueDate = null;
                 for (BusinessQuotationDto.BusinessQuotationItemDto item : businessQuotation.getItems()) {
                     Product product = productRepository.findById(item.getItemId()).orElse(null);
                     if (product == null || !"ITEM".equals(product.getCategory())) {
                         continue; // ITEM 타입만 처리
                     }
-                    
-                    confirmQuotationItem(quotationId, businessQuotation, item, product);
+
+                    LocalDate confirmedDueDate = confirmQuotationItem(quotationId, businessQuotation, item, product);
+                    if (confirmedDueDate != null) {
+                        if (maxConfirmedDueDate == null || confirmedDueDate.isAfter(maxConfirmedDueDate)) {
+                            maxConfirmedDueDate = confirmedDueDate;
+                        }
+                    }
                 }
-                
-                // PPtodo Business 서비스에 dueDate 업데이트, 견적 상태도 바꿔야함(주석 처리 - 추후 개발)
-                // updateQuotationDueDate(quotationId, businessQuotation);
+
+                // Business 서비스에 확정 납기일과 견적 상태 업데이트 이벤트 발행
+                if (maxConfirmedDueDate != null) {
+                    String transactionId = UUID.randomUUID().toString();
+                    QuotationUpdateEvent event = QuotationUpdateEvent.builder()
+                        .transactionId(transactionId)
+                        .quotationId(quotationId)
+                        .dueDate(maxConfirmedDueDate)
+                        .quotationStatus("APPROVAL")
+                        .build();
+
+                    kafkaProducerService.sendToTopic(QUOTATION_UPDATE_TOPIC, quotationId, event);
+                    log.info("견적 업데이트 이벤트 발행: transactionId={}, quotationId={}, dueDate={}",
+                        transactionId, quotationId, maxConfirmedDueDate);
+                }
             }
             
             log.info("견적 확정 처리 완료");
-            
+
         } catch (Exception e) {
             log.error("견적 확정 처리 중 오류 발생", e);
             throw new RuntimeException("견적 확정 처리 실패", e);
         }
     }
-    
+
+    @Override
+    @Transactional
+    public DeferredResult<ResponseEntity<ApiResponse<Void>>> confirmQuotationsAsync(QuotationConfirmRequestDto requestDto) {
+        log.info("견적 확정 비동기 처리 시작: quotationIds={}", requestDto.getQuotationIds());
+
+        // DeferredResult 생성 (타임아웃 30초)
+        DeferredResult<ResponseEntity<ApiResponse<Void>>> deferredResult =
+                new DeferredResult<>(30000L);
+
+        // 타임아웃 처리
+        deferredResult.onTimeout(() -> {
+            log.warn("견적 확정 처리 타임아웃");
+            deferredResult.setResult(ResponseEntity
+                    .status(HttpStatus.REQUEST_TIMEOUT)
+                    .body(ApiResponse.fail("처리 시간이 초과되었습니다.", HttpStatus.REQUEST_TIMEOUT)));
+        });
+
+        try {
+            for (String quotationId : requestDto.getQuotationIds()) {
+                // Business 서비스에서 견적 데이터 조회
+                BusinessQuotationDto businessQuotation = businessQuotationServicePort.getQuotationById(quotationId);
+                if (businessQuotation == null) {
+                    log.warn("견적을 찾을 수 없습니다: quotationId={}", quotationId);
+                    continue;
+                }
+
+                // 각 아이템별로 MPS/MRP 생성하고 최대 납기일 추적
+                LocalDate maxConfirmedDueDate = null;
+                for (BusinessQuotationDto.BusinessQuotationItemDto item : businessQuotation.getItems()) {
+                    Product product = productRepository.findById(item.getItemId()).orElse(null);
+                    if (product == null || !"ITEM".equals(product.getCategory())) {
+                        continue; // ITEM 타입만 처리
+                    }
+
+                    LocalDate confirmedDueDate = confirmQuotationItem(quotationId, businessQuotation, item, product);
+                    if (confirmedDueDate != null) {
+                        if (maxConfirmedDueDate == null || confirmedDueDate.isAfter(maxConfirmedDueDate)) {
+                            maxConfirmedDueDate = confirmedDueDate;
+                        }
+                    }
+                }
+
+                // Business 서비스에 확정 납기일과 견적 상태 업데이트 이벤트 발행
+                if (maxConfirmedDueDate != null) {
+                    String transactionId = UUID.randomUUID().toString();
+
+                    // DeferredResult 등록
+                    asyncResultManager.registerResult(transactionId, deferredResult);
+
+                    QuotationUpdateEvent event = QuotationUpdateEvent.builder()
+                        .transactionId(transactionId)
+                        .quotationId(quotationId)
+                        .dueDate(maxConfirmedDueDate)
+                        .quotationStatus("APPROVAL")
+                        .build();
+
+                    kafkaProducerService.sendToTopic(QUOTATION_UPDATE_TOPIC, quotationId, event);
+                    log.info("견적 업데이트 이벤트 발행: transactionId={}, quotationId={}, dueDate={}",
+                        transactionId, quotationId, maxConfirmedDueDate);
+                }
+            }
+
+        } catch (Exception e) {
+            log.error("견적 확정 처리 중 오류 발생", e);
+            deferredResult.setResult(ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.fail("견적 확정 처리 실패: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR)));
+        }
+
+        return deferredResult;
+    }
+
     /**
      * 단일 아이템에 대한 MPS/MRP 확정 처리
      *
@@ -566,8 +682,10 @@ public class QuotationServiceImpl implements QuotationService {
      * 1. 확정 납기 = 오늘 + leadTime(생산) + 4일(배송)
      * 2. 재고에서 충당 가능한 만큼 예약
      * 3. 부족분에 대해 MPS/MRP 생성
+     *
+     * @return 확정 납기일
      */
-    private void confirmQuotationItem(String quotationId,
+    private LocalDate confirmQuotationItem(String quotationId,
                                      BusinessQuotationDto businessQuotation,
                                      BusinessQuotationDto.BusinessQuotationItemDto item,
                                      Product product) {
@@ -583,7 +701,7 @@ public class QuotationServiceImpl implements QuotationService {
         Optional<Bom> bomOpt = bomRepository.findByProductId(productId);
         if (bomOpt.isEmpty()) {
             log.warn("BOM을 찾을 수 없습니다: productId={}", productId);
-            return;
+            return null;
         }
 
         Bom bom = bomOpt.get();
@@ -629,6 +747,8 @@ public class QuotationServiceImpl implements QuotationService {
 
         log.info("아이템 확정 완료: productId={}, 재고예약={}개, 생산계획={}개, 최종납기={}",
                 productId, availableFromStock, shortageQuantity, confirmedDueDate);
+
+        return confirmedDueDate;
     }
     
     /**
@@ -646,9 +766,7 @@ public class QuotationServiceImpl implements QuotationService {
         LocalDate productionCompleteDate = today.plusDays(leadTimeDays);
 
         // MPS 마스터 생성
-        String mpsId = UUID.randomUUID().toString();
         Mps mps = Mps.builder()
-            .id(mpsId)
             .bomId(bom.getId())
             .quotationId(quotationId)
             .startWeek(today)  // 시작일: 오늘
@@ -656,7 +774,7 @@ public class QuotationServiceImpl implements QuotationService {
             .build();
 
         mpsRepository.save(mps);
-        log.info("MPS 마스터 생성: mpsId={}, 기간: {} ~ {}", mpsId, today, productionCompleteDate);
+        log.info("MPS 마스터 생성: 기간: {} ~ {}", today, productionCompleteDate);
 
         // 생산 주차별로 MPS Detail 생성
         // 수요는 생산완료일에 발생
@@ -677,8 +795,7 @@ public class QuotationServiceImpl implements QuotationService {
             String firstWeekLabel = getWeekString(firstProductionWeek);
 
             MpsDetail productionDetail = MpsDetail.builder()
-                .id(UUID.randomUUID().toString())
-                .mpsId(mpsId)
+                .mpsId(mps.getId())
                 .weekLabel(firstWeekLabel)
                 .demand(0)
                 .requiredInventory(0)
@@ -692,8 +809,7 @@ public class QuotationServiceImpl implements QuotationService {
 
         // 수요 발생 주차의 MPS Detail
         MpsDetail demandDetail = MpsDetail.builder()
-            .id(UUID.randomUUID().toString())
-            .mpsId(mpsId)
+            .mpsId(mps.getId())
             .weekLabel(demandWeek)
             .demand(productionQuantity)
             .requiredInventory(productionQuantity)
@@ -704,7 +820,7 @@ public class QuotationServiceImpl implements QuotationService {
         mpsDetailRepository.save(demandDetail);
         log.info("MPS Detail 생성 (수요): week={}, 수요량={}", demandWeek, productionQuantity);
 
-        log.info("MPS 생성 완료: mpsId={}", mpsId);
+        log.info("MPS 생성 완료: mpsId={}", mps.getId());
     }
     
     /**
@@ -746,21 +862,37 @@ public class QuotationServiceImpl implements QuotationService {
             Integer requiredQuantity = bomItem.getCount().multiply(BigDecimal.valueOf(parentQuantity)).intValue();
             Integer currentStock = getActualAvailableStock(bomItem.getComponentId());
             Integer shortageQuantity = Math.max(0, requiredQuantity - currentStock);
-            
+            Integer availableFromStock = Math.min(requiredQuantity, currentStock);
+
+            // 원자재 재고 예약 (재고에서 충당 가능한 만큼)
+            if (availableFromStock > 0) {
+                boolean reserved = stockReservationService.reserveStock(
+                    bomItem.getComponentId(),
+                    BigDecimal.valueOf(availableFromStock)
+                );
+                if (!reserved) {
+                    log.warn("원자재 재고 예약 실패: productId={}, quantity={}",
+                        bomItem.getComponentId(), availableFromStock);
+                } else {
+                    log.info("원자재 재고 예약 완료: productId={}, quantity={}",
+                        bomItem.getComponentId(), availableFromStock);
+                }
+            }
+
             // 배송 시작일 계산 (공급업체 배송일 고려)
             int deliveryDays = 0;
-            if (component.getSupplierCompany() != null && 
+            if (component.getSupplierCompany() != null &&
                 component.getSupplierCompany().getDeliveryDays() != null) {
                 deliveryDays = component.getSupplierCompany().getDeliveryDays();
             }
-            
+
             LocalDate procurementStartDate = dueDate.minusDays(deliveryDays);
             LocalDate expectedArrivalDate = dueDate;
-            
+
             // MRP 레코드 생성
             Mrp mrp = Mrp.builder()
                 .id(UUID.randomUUID().toString())
-                .bomId(parentBom.getId()) 
+                .bomId(parentBom.getId())
                 .quotationId(quotationId)
                 .productId(bomItem.getComponentId())
                 .requiredCount(BigDecimal.valueOf(requiredQuantity))
@@ -768,11 +900,11 @@ public class QuotationServiceImpl implements QuotationService {
                 .expectedArrival(expectedArrivalDate)
                 .status(shortageQuantity > 0 ? "INSUFFICIENT" : "SUFFICIENT")
                 .build();
-            
+
             mrpRepository.save(mrp);
-            
-            log.debug("MRP 생성: productId={}, 필요량={}, 현재재고={}, 부족량={}", 
-                     bomItem.getComponentId(), requiredQuantity, currentStock, shortageQuantity);
+
+            log.info("MRP 생성: productId={}, 필요량={}, 현재재고={}, 재고예약={}, 부족량={}",
+                     bomItem.getComponentId(), requiredQuantity, currentStock, availableFromStock, shortageQuantity);
             
             // 중간제품인 경우 하위 BOM 처리
             if ("ITEM".equals(component.getCategory()) && shortageQuantity > 0) {
@@ -806,9 +938,14 @@ public class QuotationServiceImpl implements QuotationService {
         Product product = productRepository.findById(bom.getProductId()).orElse(null);
         String productName = product != null ? product.getProductName() : "알 수 없는 제품";
 
-        // 2. 주차 범위 계산 (startDate 앞 3주차부터)
-        LocalDate queryStartDate = startDate.minusWeeks(3);
-        LocalDate queryEndDate = endDate;
+        // 2. 주차 범위 계산 (startDate가 포함된 주차 앞 3주차부터)
+        // startDate와 endDate가 포함된 주의 시작일(월요일) 찾기
+        LocalDate startWeekStart = getWeekStart(startDate);
+        LocalDate endWeekStart = getWeekStart(endDate);
+
+        // startDate가 포함된 주차 앞 3주차부터 시작
+        LocalDate queryStartDate = startWeekStart.minusWeeks(3);
+        LocalDate queryEndDate = endWeekStart;
 
         // 총 주차 수 계산
         long weeksBetween = java.time.temporal.ChronoUnit.WEEKS.between(queryStartDate, queryEndDate) + 1;
@@ -828,10 +965,10 @@ public class QuotationServiceImpl implements QuotationService {
         // 4. MPS Detail들을 주차별로 그룹핑
         Map<String, MpsQueryResponseDto.WeekDto> weekMap = new LinkedHashMap<>();
 
-        // 모든 주차 초기화
-        LocalDate currentWeek = queryStartDate;
-        while (!currentWeek.isAfter(queryEndDate)) {
-            String weekLabel = getWeekString(currentWeek);
+        // 모든 주차 초기화 (주 시작일 기준)
+        LocalDate currentWeekStart = queryStartDate;
+        while (!currentWeekStart.isAfter(queryEndDate)) {
+            String weekLabel = getWeekString(currentWeekStart);
             weekMap.put(weekLabel, MpsQueryResponseDto.WeekDto.builder()
                     .week(weekLabel)
                     .demand(0)
@@ -839,7 +976,7 @@ public class QuotationServiceImpl implements QuotationService {
                     .productionNeeded(0)
                     .plannedProduction(0)
                     .build());
-            currentWeek = currentWeek.plusWeeks(1);
+            currentWeekStart = currentWeekStart.plusWeeks(1);
         }
 
         // MPS Detail 데이터 집계 (같은 bomId의 모든 MPS를 합산)
