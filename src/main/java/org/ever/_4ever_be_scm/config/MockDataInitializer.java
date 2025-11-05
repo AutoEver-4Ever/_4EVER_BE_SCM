@@ -116,7 +116,7 @@ public class MockDataInitializer {
                     .detailAddress("테헤란로 " + (100 + i) + "길")
                     .status("ACTIVE")
                     .officePhone("02-1234-567" + i)
-                    .deliveryDays(3 + i)
+                    .deliveryDays(java.time.Duration.ofSeconds((3 + i) * 86_400L))
                     .build();
             companies.add(company);
         }

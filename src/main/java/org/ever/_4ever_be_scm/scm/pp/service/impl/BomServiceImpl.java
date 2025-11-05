@@ -98,7 +98,11 @@ public class BomServiceImpl implements BomService {
                 if (componentProduct.getOriginPrice() != null) originPrice = componentProduct.getOriginPrice();
                 if (componentProduct.getSupplierCompany() != null) {
                     SupplierCompany supplier = componentProduct.getSupplierCompany();
-                    if (supplier.getDeliveryDays() != null) deliveryDays = BigDecimal.valueOf(supplier.getDeliveryDays());
+                    if (supplier.getDeliveryDays() != null) {
+                        // convert seconds -> days (fractional)
+                        deliveryDays = BigDecimal.valueOf(supplier.getDeliveryDays().getSeconds())
+                                .divide(BigDecimal.valueOf(86_400), 6, RoundingMode.HALF_UP);
+                    }
                 }
             } else if ("ITEM".equals(componentType)) {
                 // 완제품(BOM): 가격, 리드타임 BOM에서 조회
@@ -212,7 +216,10 @@ public class BomServiceImpl implements BomService {
                 if (componentProduct.getOriginPrice() != null) originPrice = componentProduct.getOriginPrice();
                 if (componentProduct.getSupplierCompany() != null) {
                     SupplierCompany supplier = componentProduct.getSupplierCompany();
-                    if (supplier.getDeliveryDays() != null) deliveryDays = BigDecimal.valueOf(supplier.getDeliveryDays());
+                    if (supplier.getDeliveryDays() != null) {
+                        deliveryDays = BigDecimal.valueOf(supplier.getDeliveryDays().getSeconds())
+                                .divide(BigDecimal.valueOf(86_400), 6, RoundingMode.HALF_UP);
+                    }
                 }
             } else if ("ITEM".equals(componentType)) {
                 // 완제품(BOM): 가격, 리드타임 BOM에서 조회

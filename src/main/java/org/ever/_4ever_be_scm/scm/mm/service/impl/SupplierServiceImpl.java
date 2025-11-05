@@ -100,7 +100,7 @@ public class SupplierServiceImpl implements SupplierService {
                     .supplierDetailAddress(supplierCompany.getDetailAddress())
                     .supplierStatusCode(status)
                     .category(category)
-                    .deliveryLeadTime(supplierCompany.getDeliveryDays())
+                    .deliveryLeadTime(supplierCompany.getDeliveryDays() != null ? (int) supplierCompany.getDeliveryDays().getSeconds() : null)
                     .build())
                 .build());
         }
@@ -130,7 +130,7 @@ public class SupplierServiceImpl implements SupplierService {
                 .supplierDetailAddress(supplierCompany.getDetailAddress())
                 .supplierStatusCode(status)
                 .category(category)
-                .deliveryLeadTime(supplierCompany.getDeliveryDays())
+                .deliveryLeadTime(supplierCompany.getDeliveryDays() != null ? (int) supplierCompany.getDeliveryDays().getSeconds() : null)
                 .build())
             .managerInfo(SupplierDetailResponseDto.ManagerInfoDto.builder()
                 .managerName(supplierUser != null ? supplierUser.getSupplierUserName() : null)
@@ -222,7 +222,7 @@ public class SupplierServiceImpl implements SupplierService {
                 .baseAddress(dto.getSupplierBaseAddress() != null ? dto.getSupplierBaseAddress() : existingCompany.getBaseAddress())
                 .detailAddress(dto.getSupplierDetailAddress() != null ? dto.getSupplierDetailAddress() : existingCompany.getDetailAddress()) // 상세주소는 기존값 유지
                 .officePhone(dto.getSupplierPhone() != null ? dto.getSupplierPhone() : existingCompany.getOfficePhone())
-                .deliveryDays(dto.getDeliverLeadTime() != null ? dto.getDeliverLeadTime() : existingCompany.getDeliveryDays())
+                .deliveryDays(dto.getDeliverLeadTime() != null ? java.time.Duration.ofSeconds(dto.getDeliverLeadTime()) : existingCompany.getDeliveryDays())
                 .supplierUser(existingCompany.getSupplierUser()); // 기존 연관관계 유지
         
         // 추가 필드들이 엔티티에 있다면 여기서 설정
@@ -266,7 +266,7 @@ public class SupplierServiceImpl implements SupplierService {
             .detailAddress(info.getSupplierDetailAddress())
             .category(info.getCategory())
             .officePhone(info.getSupplierPhone())
-            .deliveryDays(info.getDeliveryLeadTime())
+            .deliveryDays(info.getDeliveryLeadTime() != null ? java.time.Duration.ofSeconds(info.getDeliveryLeadTime()) : null)
             .build();
 
         SupplierCompany savedCompany = supplierCompanyRepository.save(supplierCompany);

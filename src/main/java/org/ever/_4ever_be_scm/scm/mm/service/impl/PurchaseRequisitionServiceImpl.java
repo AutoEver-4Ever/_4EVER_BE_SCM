@@ -368,9 +368,10 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
                 Product firstProduct = productRepository.findById(supplierItems.get(0).getProductId()).orElse(null);
                 if (firstProduct != null && firstProduct.getSupplierCompany() != null) {
                     supplierName = firstProduct.getSupplierCompany().getCompanyName();
-                    int deliveryDays = Optional.ofNullable(firstProduct.getSupplierCompany().getDeliveryDays())
-                            .orElse(4);
-                    dueDate = LocalDateTime.now().plusDays(deliveryDays+1);
+                    long deliverySeconds = Optional.ofNullable(firstProduct.getSupplierCompany().getDeliveryDays())
+                            .map(java.time.Duration::getSeconds)
+                            .orElse(4L * 86_400);
+                    dueDate = LocalDateTime.now().plusSeconds(deliverySeconds).plusDays(1);
                 }
             }
 
