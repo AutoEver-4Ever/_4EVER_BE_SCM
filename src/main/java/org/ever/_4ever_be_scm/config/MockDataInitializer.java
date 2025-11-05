@@ -458,5 +458,254 @@ public class MockDataInitializer {
         routingRepository.saveAll(routings);
 
         log.info("PP 도메인 목업 데이터 생성 완료");
+
+        // 추가: 자동차 외장재 30건 BOM(1/2/3-Depth) 생성
+        try {
+            initializeExteriorBoms();
+        } catch (Exception e) {
+            log.warn("외장재 BOM 생성 중 오류 발생: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 자동차 외장재 30건 BOM 시드
+     * - 1-Depth: 15건 (MATERIAL만, 내부 공정 Routing 포함)
+     * - 2-Depth: 10건 (1-Depth 제품을 ITEM으로 참조, 조립 Routing 포함)
+     * - 3-Depth: 5건  (2-Depth 제품을 ITEM으로 참조, 최종 조립 Routing 포함)
+     * Routing.required_time 단위: 초(5~600)
+     */
+    private void initializeExteriorBoms() {
+        // 멱등 가드: 이미 30건 이상 BOM이 있으면 스킵
+        if (bomRepository.count() >= 30) {
+            log.info("BOM이 이미 30건 이상 존재합니다. 외장재 BOM 시드를 스킵합니다.");
+            return;
+        }
+
+        log.info("외장재 BOM 30건 생성 시작");
+
+        // 0) 재사용할 MATERIAL Product 생성 (없으면 간단 생성)
+        Product alPlate = ensureMaterialProduct("PROD-AL-PLATE-2T", "알루미늄 판재 2T", "EA", new java.math.BigDecimal("12000"));
+        Product paintBlack = ensureMaterialProduct("PROD-PAINT-BLK", "도료 블랙", "KG", new java.math.BigDecimal("80000"));
+        Product clipStd = ensureMaterialProduct("PROD-CLIP-STD", "고정 클립 표준", "EA", new java.math.BigDecimal("200"));
+        Product steelFrameDoor = ensureMaterialProduct("PROD-STEEL-FRAME-DOOR", "강철 프레임(도어)", "EA", new java.math.BigDecimal("35000"));
+        Product paintClear = ensureMaterialProduct("PROD-PAINT-CLEAR", "클리어 코트", "KG", new java.math.BigDecimal("90000"));
+        Product adhesive3m = ensureMaterialProduct("PROD-ADHESIVE-3M", "3M 접착제", "EA", new java.math.BigDecimal("5000"));
+
+        // 1) Operation 풀 구성(필요 최소)
+        java.util.List<Operation> ops = new java.util.ArrayList<>();
+        ops.add(createOperation("OP-ASSEMBLY", "조립", 180));
+        ops.add(createOperation("OP-ULTRA-WELD", "초음파용접", 90));
+        ops.add(createOperation("OP-TAPE-APPLY", "테이프 부착", 60));
+        ops.add(createOperation("OP-INSPECTION", "검사", 90));
+        ops.add(createOperation("OP-PACKING", "포장", 60));
+        ops.add(createOperation("OP-SURFACE-PREP", "표면처리", 60));
+        ops.add(createOperation("OP-FORMING", "성형", 180));
+        ops.add(createOperation("OP-PRIMER", "프라이머", 120));
+        ops.add(createOperation("OP-BASECOAT", "베이스코트", 240));
+        ops.add(createOperation("OP-CLEARCOAT", "클리어코트", 180));
+        ops.add(createOperation("OP-CURING", "건조", 300));
+        operationRepository.saveAll(ops);
+
+        // 2) 1-Depth BOM 15건 (리프, MATERIAL만 + 내부 공정 Routing)
+        java.util.List<Bom> depth1Boms = new java.util.ArrayList<>();
+        for (int i = 1; i <= 15; i++) {
+            String prodId = String.format("PROD-EXT-%03d", i);
+            Product prod = ensureItemProduct(prodId, "외장 부품 " + i, "EA");
+
+            Bom bom = Bom.builder()
+                    .productId(prod.getId())
+                    .description("1-Depth Leaf BOM - 외장 부품 " + i)
+                    .version(1)
+                    .leadTime(java.math.BigDecimal.ZERO)
+                    .originPrice(new java.math.BigDecimal("0"))
+                    .sellingPrice(new java.math.BigDecimal("0"))
+                    .build();
+            bom = bomRepository.save(bom);
+            bom.setBomCode("BOM-" + trailing7(bom.getId()));
+            bomRepository.save(bom);
+
+            // MATERIAL 2~3개 구성
+            BomItem m1 = BomItem.builder().bomId(bom.getId()).componentType("MATERIAL").componentId(alPlate.getId()).unit("EA").count(new java.math.BigDecimal("1")).build();
+            BomItem m2 = BomItem.builder().bomId(bom.getId()).componentType("MATERIAL").componentId(paintBlack.getId()).unit("KG").count(new java.math.BigDecimal("0.15")).build();
+            BomItem m3 = BomItem.builder().bomId(bom.getId()).componentType("MATERIAL").componentId(clipStd.getId()).unit("EA").count(new java.math.BigDecimal("8")).build();
+            m1 = bomItemRepository.save(m1);
+            m2 = bomItemRepository.save(m2);
+            m3 = bomItemRepository.save(m3);
+
+            // 내부 공정 Routing: 대표 MATERIAL(m1)에 연결 (5~600초 범위)
+            createRoutingChainSeconds(m1.getId(), new int[]{secs(60+i), secs(100+i), secs(140+i), secs(180+i), secs(220+i), secs(260+i)},
+                    new String[]{"OP-SURFACE-PREP","OP-FORMING","OP-PRIMER","OP-BASECOAT","OP-CLEARCOAT","OP-CURING"}, ops);
+            createRoutingChainSeconds(m1.getId(), new int[]{secs(40+i), secs(30+i)}, new String[]{"OP-INSPECTION","OP-PACKING"}, ops, 7);
+
+            // Explosion 기록(level=1)
+            saveExplosion(bom.getId(), alPlate.getId(), 1, m1.getId());
+            saveExplosion(bom.getId(), paintBlack.getId(), 1, null);
+            saveExplosion(bom.getId(), clipStd.getId(), 1, null);
+
+            depth1Boms.add(bom);
+        }
+
+        // 3) 2-Depth BOM 10건 (1-Depth 참조 + 조립 Routing)
+        java.util.List<Bom> depth2Boms = new java.util.ArrayList<>();
+        for (int i = 16; i <= 25; i++) {
+            String prodId = String.format("PROD-EXT-%03d", i);
+            Product prod = ensureItemProduct(prodId, "외장 서브어셈블리 " + i, "EA");
+            Bom bom = Bom.builder()
+                    .productId(prod.getId())
+                    .description("2-Depth Sub-Assembly BOM - 외장 서브어셈블리 " + i)
+                    .version(1)
+                    .leadTime(java.math.BigDecimal.ZERO)
+                    .originPrice(new java.math.BigDecimal("0"))
+                    .sellingPrice(new java.math.BigDecimal("0"))
+                    .build();
+            bom = bomRepository.save(bom);
+            bom.setBomCode("BOM-" + trailing7(bom.getId()));
+            bomRepository.save(bom);
+
+            // 하위 1-Depth 참조 2개 + MATERIAL 1~2개
+            Bom ref1 = depth1Boms.get((i - 16) % depth1Boms.size());
+            Bom ref2 = depth1Boms.get((i - 10) % depth1Boms.size());
+            BomItem i1 = BomItem.builder().bomId(bom.getId()).componentType("ITEM").componentId(ref1.getProductId()).unit("EA").count(new java.math.BigDecimal("1")).build();
+            BomItem i2 = BomItem.builder().bomId(bom.getId()).componentType("ITEM").componentId(ref2.getProductId()).unit("EA").count(new java.math.BigDecimal("1")).build();
+            BomItem m1 = BomItem.builder().bomId(bom.getId()).componentType("MATERIAL").componentId(steelFrameDoor.getId()).unit("EA").count(new java.math.BigDecimal("1")).build();
+            BomItem m2 = BomItem.builder().bomId(bom.getId()).componentType("MATERIAL").componentId(paintClear.getId()).unit("KG").count(new java.math.BigDecimal("0.05")).build();
+            i1 = bomItemRepository.save(i1);
+            i2 = bomItemRepository.save(i2);
+            m1 = bomItemRepository.save(m1);
+            m2 = bomItemRepository.save(m2);
+
+            // 조립 Routing: 대표 i1에 연결
+            createRoutingChainSeconds(i1.getId(), new int[]{secs(180+i), secs(90+i), secs(60+i), secs(45+i)},
+                    new String[]{"OP-ASSEMBLY","OP-ULTRA-WELD","OP-INSPECTION","OP-PACKING"}, ops);
+
+            // Explosion(level=2)
+            saveExplosion(bom.getId(), ref1.getProductId(), 2, null);
+            saveExplosion(bom.getId(), ref2.getProductId(), 2, null);
+            saveExplosion(bom.getId(), steelFrameDoor.getId(), 2, null);
+            saveExplosion(bom.getId(), paintClear.getId(), 2, null);
+
+            depth2Boms.add(bom);
+        }
+
+        // 4) 3-Depth BOM 5건 (2-Depth 참조 + 최종 조립 Routing)
+        for (int i = 26; i <= 30; i++) {
+            String prodId = String.format("PROD-EXT-%03d", i);
+            Product prod = ensureItemProduct(prodId, "외장 패키지 " + i, "EA");
+            Bom bom = Bom.builder()
+                    .productId(prod.getId())
+                    .description("3-Depth Package BOM - 외장 패키지 " + i)
+                    .version(1)
+                    .leadTime(java.math.BigDecimal.ZERO)
+                    .originPrice(new java.math.BigDecimal("0"))
+                    .sellingPrice(new java.math.BigDecimal("0"))
+                    .build();
+            bom = bomRepository.save(bom);
+            bom.setBomCode("BOM-" + trailing7(bom.getId()));
+            bomRepository.save(bom);
+
+            Bom refA = depth2Boms.get((i - 26) % depth2Boms.size());
+            Bom refB = depth2Boms.get((i - 23) % depth2Boms.size());
+            BomItem i1 = BomItem.builder().bomId(bom.getId()).componentType("ITEM").componentId(refA.getProductId()).unit("EA").count(new java.math.BigDecimal("1")).build();
+            BomItem i2 = BomItem.builder().bomId(bom.getId()).componentType("ITEM").componentId(refB.getProductId()).unit("EA").count(new java.math.BigDecimal("1")).build();
+            BomItem m1 = BomItem.builder().bomId(bom.getId()).componentType("MATERIAL").componentId(adhesive3m.getId()).unit("EA").count(new java.math.BigDecimal("2")).build();
+            i1 = bomItemRepository.save(i1);
+            i2 = bomItemRepository.save(i2);
+            m1 = bomItemRepository.save(m1);
+
+            // 최종 조립 Routing: 대표 i1
+            createRoutingChainSeconds(i1.getId(), new int[]{secs(240+i), secs(60+i), secs(90+i), secs(60+i)},
+                    new String[]{"OP-ASSEMBLY","OP-TAPE-APPLY","OP-INSPECTION","OP-PACKING"}, ops);
+
+            // Explosion(level=3)
+            saveExplosion(bom.getId(), refA.getProductId(), 3, null);
+            saveExplosion(bom.getId(), refB.getProductId(), 3, null);
+            saveExplosion(bom.getId(), adhesive3m.getId(), 3, null);
+        }
+
+        log.info("외장재 BOM 30건 생성 완료");
+    }
+
+    private Product ensureMaterialProduct(String id, String name, String unit, java.math.BigDecimal originPrice) {
+        return productRepository.findById(id).orElseGet(() -> {
+            Product p = Product.builder()
+                    .id(id)
+                    .productCode(id)
+                    .category("MATERIAL")
+                    .productName(name)
+                    .unit(unit)
+                    .originPrice(originPrice)
+                    .sellingPrice(originPrice.multiply(new java.math.BigDecimal("1.2")))
+                    .build();
+            return productRepository.save(p);
+        });
+    }
+
+    private Product ensureItemProduct(String id, String name, String unit) {
+        return productRepository.findById(id).orElseGet(() -> {
+            Product p = Product.builder()
+                    .id(id)
+                    .productCode(id)
+                    .category("ITEM")
+                    .productName(name)
+                    .unit(unit)
+                    .originPrice(new java.math.BigDecimal("0"))
+                    .sellingPrice(new java.math.BigDecimal("0"))
+                    .build();
+            return productRepository.save(p);
+        });
+    }
+
+    private Operation createOperation(String code, String name, int defaultMinutes) {
+        return Operation.builder()
+                .id(java.util.UUID.randomUUID().toString())
+                .opCode(code)
+                .opName(name)
+                .requiredTime(java.math.BigDecimal.valueOf(defaultMinutes))
+                .description(name + " 표준 공정")
+                .build();
+    }
+
+    private void createRoutingChainSeconds(String bomItemId, int[] seconds, String[] opCodes, java.util.List<Operation> ops) {
+        createRoutingChainSeconds(bomItemId, seconds, opCodes, ops, 1);
+    }
+
+    private void createRoutingChainSeconds(String bomItemId, int[] seconds, String[] opCodes, java.util.List<Operation> ops, int startSeq) {
+        int seq = startSeq;
+        for (int i = 0; i < seconds.length && i < opCodes.length; i++) {
+            String opCode = opCodes[i];
+            String opId = ops.stream().filter(o -> opCode.equals(o.getOpCode())).map(Operation::getId).findFirst().orElse(ops.get(0).getId());
+            Routing r = Routing.builder()
+                    .bomItemId(bomItemId)
+                    .operationId(opId)
+                    .sequence(seq++)
+                    .requiredTime(Math.max(5, Math.min(600, seconds[i])))
+                    .build();
+            routingRepository.save(r);
+        }
+    }
+
+    private void saveExplosion(String parentBomId, String componentProductId, int level, String routingId) {
+        BomExplosion exp = BomExplosion.builder()
+                .parentBomId(parentBomId)
+                .componentProductId(componentProductId)
+                .level(level)
+                .totalRequiredCount(java.math.BigDecimal.ONE)
+                .path("/bom/" + parentBomId)
+                .routingId(routingId)
+                .build();
+        bomExplosionRepository.save(exp);
+    }
+
+    private int secs(int base) {
+        // 5~600 범위로 fold
+        int v = (base * 37) % 600;
+        return Math.max(5, v);
+    }
+
+    private String trailing7(String s) {
+        if (s == null) return "0000000";
+        String compact = s.replaceAll("[^A-Za-z0-9]", "");
+        int len = compact.length();
+        return (len <= 7) ? compact : compact.substring(len - 7);
     }
 }
