@@ -39,4 +39,9 @@ public interface KafkaProducerService {
      * 동기 방식 이벤트 발행
      */
     void sendEventSync(String topic, String key, Object event);
+
+    /**
+     * 특정 토픽으로 이벤트 발행 (범용)
+     */
+    CompletableFuture<SendResult<String, Object>> sendToTopic(String topic, String key, Object event);
 }

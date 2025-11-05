@@ -152,7 +152,7 @@ public class MockDataInitializer {
             Product product = Product.builder()
                     .productCode("PROD" + String.format("%04d", i))
                     .productName("제품" + i)
-                    .category(i % 2 == 1 ? "ITEM" : "MATERIAL")
+                    .category("MATERIAL")
                     .unit("EA")
                     .originPrice(BigDecimal.valueOf(10000 + i * 5000))
                     .sellingPrice(BigDecimal.valueOf(12000 + i * 6000))
@@ -361,7 +361,7 @@ public class MockDataInitializer {
         for (int i = 0; i < 5; i++) {
             BomItem item = BomItem.builder()
                     .bomId(boms.get(i).getId())
-                    .componentType(i % 2 == 0 ? "ITEM" : "PRODUCT")
+                    .componentType(i % 2 == 0 ? "ITEM" : "MATERIAL")
                     .componentId("comp-" + (i + 1))
                     .unit("EA")
                     .count(BigDecimal.valueOf(2 + i))
@@ -437,6 +437,7 @@ public class MockDataInitializer {
                     .id(UUID.randomUUID().toString())
                     .opCode("OP-" + String.format("%04d", i))
                     .opName("공정 " + i)
+                    .requiredTime(BigDecimal.valueOf(110+(i*10)))
                     .description("공정 설명 " + i)
                     .build();
             operations.add(operation);

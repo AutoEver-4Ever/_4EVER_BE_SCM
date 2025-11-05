@@ -41,7 +41,7 @@ public class Mes extends TimeStamp {
     private Integer quantity;
 
     @Column(name = "status", length = 20)
-    private String status;  // PENDING, IN_PROGRESS, COMPLETED
+    private String status;  // PENDING, IN_PROGRESS, COMPLETED, SKIP
 
     @Column(name = "current_operation_id")
     private String currentOperationId;

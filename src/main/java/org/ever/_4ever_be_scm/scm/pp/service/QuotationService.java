@@ -1,8 +1,11 @@
 package org.ever._4ever_be_scm.scm.pp.service;
 
+import org.ever._4ever_be_scm.common.response.ApiResponse;
 import org.ever._4ever_be_scm.scm.pp.dto.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.context.request.async.DeferredResult;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -23,6 +26,11 @@ public interface QuotationService {
     Page<QuotationSimulateResponseDto> simulateQuotations(QuotationSimulateRequestDto requestDto, Pageable pageable);
     List<MpsPreviewResponseDto> previewMps(List<String> quotationIds);
     void confirmQuotations(QuotationConfirmRequestDto requestDto);
+
+    /**
+     * 견적 확정 (비동기 - 분산 트랜잭션)
+     */
+    DeferredResult<ResponseEntity<ApiResponse<Void>>> confirmQuotationsAsync(QuotationConfirmRequestDto requestDto);
 
     /**
      * MPS 조회 (주차별, bomId 기준)

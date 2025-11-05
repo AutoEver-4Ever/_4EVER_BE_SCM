@@ -120,6 +120,7 @@ public class SupplierServiceImpl implements SupplierService {
 
         return SupplierDetailResponseDto.builder()
             .supplierInfo(SupplierDetailResponseDto.SupplierInfoDto.builder()
+                .businessNumber(supplierCompany.getBusinessNumber())
                 .supplierId(supplierCompany.getId())
                 .supplierName(supplierCompany.getCompanyName())
                 .supplierNumber(supplierCompany.getCompanyCode())
@@ -258,6 +259,7 @@ public class SupplierServiceImpl implements SupplierService {
 
         SupplierCompany supplierCompany = SupplierCompany.builder()
             .companyCode(generateSupplierCode())
+            .businessNumber(info.getBusinessNumber())
             .companyName(info.getSupplierName())
             .status("ACTIVE")
             .baseAddress(info.getSupplierBaseAddress())

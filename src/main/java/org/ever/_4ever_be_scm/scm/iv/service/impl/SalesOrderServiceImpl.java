@@ -1,17 +1,24 @@
 package org.ever._4ever_be_scm.scm.iv.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import org.ever._4ever_be_scm.common.response.ApiResponse;
+import org.ever._4ever_be_scm.infrastructure.kafka.config.KafkaTopicConfig;
 import org.ever._4ever_be_scm.scm.iv.dto.SalesOrderDetailDto;
 import org.ever._4ever_be_scm.scm.iv.dto.SalesOrderDto;
+import org.ever._4ever_be_scm.scm.iv.dto.SalesOrderStatusChangeRequestDto;
 import org.ever._4ever_be_scm.scm.iv.integration.dto.SdOrderDetailResponseDto;
 import org.ever._4ever_be_scm.scm.iv.integration.dto.SdOrderDto;
 import org.ever._4ever_be_scm.scm.iv.integration.dto.SdOrderListResponseDto;
 import org.ever._4ever_be_scm.scm.iv.integration.port.SdOrderServicePort;
 import org.ever._4ever_be_scm.scm.iv.service.SalesOrderService;
+import org.ever.event.SalesOrderStatusChangeEvent;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.async.DeferredResult;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -22,8 +29,10 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class SalesOrderServiceImpl implements SalesOrderService {
-    
+
     private final SdOrderServicePort sdOrderServicePort;
+    private final org.ever._4ever_be_scm.infrastructure.kafka.producer.KafkaProducerService kafkaProducerService;
+    private final org.ever._4ever_be_scm.common.async.GenericAsyncResultManager<Void> asyncResultManager;
 
     /**
      * 생산중 판매 주문 목록 조회 (IN_PRODUCTION 상태)
@@ -141,5 +150,46 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 .statusCode(sdDetail.getOrder().getStatusCode())
                 .orderItems(orderItems)
                 .build();
+    }
+
+    @Override
+    public DeferredResult<ResponseEntity<ApiResponse<Void>>> changeSalesOrderStatusAsync(
+            String salesOrderId, SalesOrderStatusChangeRequestDto requestDto) {
+
+        // DeferredResult 생성 (타임아웃 30초)
+        DeferredResult<ResponseEntity<ApiResponse<Void>>> deferredResult =
+                new DeferredResult<>(30000L);
+
+        // 타임아웃 처리
+        deferredResult.onTimeout(() -> {
+            deferredResult.setResult(ResponseEntity
+                    .status(HttpStatus.REQUEST_TIMEOUT)
+                    .body(ApiResponse.fail("처리 시간이 초과되었습니다.", HttpStatus.REQUEST_TIMEOUT)));
+        });
+
+        try {
+            // 트랜잭션 ID 생성 및 DeferredResult 등록
+            String transactionId = java.util.UUID.randomUUID().toString();
+            asyncResultManager.registerResult(transactionId, deferredResult);
+
+            // Business 서버로 상태 변경 이벤트 발행
+            SalesOrderStatusChangeEvent event = SalesOrderStatusChangeEvent.builder()
+                    .transactionId(transactionId)
+                    .salesOrderId(salesOrderId)
+                    .itemIds(requestDto.getItemIds())
+                    .timestamp(System.currentTimeMillis())
+                    .build();
+
+            kafkaProducerService.sendToTopic(
+                    KafkaTopicConfig.SALES_ORDER_STATUS_CHANGE_TOPIC,
+                    salesOrderId, event);
+
+        } catch (Exception e) {
+            deferredResult.setResult(ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.fail("판매 주문 상태 변경 실패: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR)));
+        }
+
+        return deferredResult;
     }
 }

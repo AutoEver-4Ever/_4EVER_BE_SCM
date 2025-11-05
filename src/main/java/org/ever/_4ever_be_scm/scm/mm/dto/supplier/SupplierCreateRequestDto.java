@@ -20,6 +20,7 @@ public class SupplierCreateRequestDto {
         private String supplierName;
         private String supplierEmail;
         private String supplierPhone;
+        private String businessNumber;
         private String supplierBaseAddress;
         private String supplierDetailAddress;
         private String category;

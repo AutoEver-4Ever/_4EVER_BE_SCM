@@ -9,6 +9,7 @@ import org.ever._4ever_be_scm.scm.pp.service.MesService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.async.DeferredResult;
 
 @Tag(name = "MES 관리", description = "작업 지시 관리 API")
 @RestController
@@ -66,13 +67,11 @@ public class MesController {
             summary = "MES 시작",
             description = "PENDING 상태의 MES를 시작하고 자재를 소비합니다."
     )
-    public ResponseEntity<ApiResponse<Void>> startMes(
+    public DeferredResult<ResponseEntity<ApiResponse<Void>>> startMes(
             @io.swagger.v3.oas.annotations.Parameter(description = "MES ID")
             @PathVariable String mesId) {
 
-        mesService.startMes(mesId);
-
-        return ResponseEntity.ok(ApiResponse.success(null, "MES가 시작되었습니다.", HttpStatus.OK));
+        return mesService.startMesAsync(mesId);
     }
 
     /**
@@ -123,12 +122,10 @@ public class MesController {
             summary = "MES 완료",
             description = "모든 공정이 완료된 MES를 완료 처리하고 완제품 재고를 증가시킵니다."
     )
-    public ResponseEntity<ApiResponse<Void>> completeMes(
+    public DeferredResult<ResponseEntity<ApiResponse<Void>>> completeMes(
             @io.swagger.v3.oas.annotations.Parameter(description = "MES ID")
             @PathVariable String mesId) {
 
-        mesService.completeMes(mesId);
-
-        return ResponseEntity.ok(ApiResponse.success(null, "MES가 완료되었습니다.", HttpStatus.OK));
+        return mesService.completeMesAsync(mesId);
     }
 }
