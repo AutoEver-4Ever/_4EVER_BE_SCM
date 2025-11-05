@@ -65,7 +65,10 @@ public class MockDataInitializer {
         try {
             // 기존 데이터 체크 (중복 방지)
             if (supplierCompanyRepository.count() > 0) {
-                log.info("목업 데이터가 이미 존재합니다. 초기화를 건너뜁니다.");
+                log.info("목업 기본 데이터가 이미 존재합니다. 섹션별 후처리만 수행합니다.");
+                // 공급사 자재 및 BOM-자재 연동 후처리만 수행
+                initializeSupplierMaterials();
+                linkBOMMaterialsToSupplierMaterials();
                 return;
             }
 
@@ -75,8 +78,12 @@ public class MockDataInitializer {
             // 2. MM 도메인 데이터 생성
             initializeMmDomain();
             
-            // 3. PP 도메인 데이터 생성
+            // 3. PP 도메인 데이터 생성 + 외장재 BOM 생성 (이미 내부에서 호출됨)
             initializePpDomain();
+
+            // 4. 공급사 MATERIAL 적재 및 BOM MATERIAL 연동
+            initializeSupplierMaterials();
+            linkBOMMaterialsToSupplierMaterials();
             
             log.info("=== 목업 데이터 초기화 완료 ===");
         } catch (Exception e) {
@@ -465,6 +472,122 @@ public class MockDataInitializer {
         } catch (Exception e) {
             log.warn("외장재 BOM 생성 중 오류 발생: {}", e.getMessage());
         }
+    }
+
+    /**
+     * 공급사별 MATERIAL 카탈로그 생성 및 재고 초기화
+     */
+    private void initializeSupplierMaterials() {
+        List<SupplierCompany> suppliers = supplierCompanyRepository.findAll();
+        if (suppliers.isEmpty()) {
+            log.info("공급사가 없어 MATERIAL 적재를 스킵합니다.");
+            return;
+        }
+
+        Warehouse materialWarehouse = warehouseRepository.findAll().stream()
+                .filter(w -> "MATERIAL".equalsIgnoreCase(w.getWarehouseType()))
+                .findFirst()
+                .orElseGet(() -> warehouseRepository.save(Warehouse.builder()
+                        .warehouseCode("WH-MAT")
+                        .warehouseName("Materials")
+                        .warehouseType("MATERIAL")
+                        .status("ACTIVE")
+                        .location("Main DC")
+                        .build()));
+
+        record MatDef(String family, String spec, String name, String uom, BigDecimal price) {}
+
+        List<MatDef> catalog = List.of(
+                new MatDef("AL","PLATE-2T","알루미늄 판재 2T","EA", new BigDecimal("12000")),
+                new MatDef("AL","PROFILE-20X20","알루미늄 프로파일 20x20","M", new BigDecimal("5000")),
+                new MatDef("ST","REINF-BAR","스틸 리인포스 바","EA", new BigDecimal("9000")),
+                new MatDef("SS","BOLT-M6-20","스테인리스 볼트 M6x20","EA", new BigDecimal("150")),
+                new MatDef("SS","NUT-M6","스테인리스 너트 M6","EA", new BigDecimal("80")),
+                new MatDef("SS","WASHER-M6","스테인리스 와셔 M6","EA", new BigDecimal("50")),
+                new MatDef("PF","CLIP-STD","표준 고정 클립","EA", new BigDecimal("200")),
+                new MatDef("PT","PRIMER-BLK","프라이머 블랙","KG", new BigDecimal("78000")),
+                new MatDef("PT","BASE-BLK","베이스코트 블랙","KG", new BigDecimal("82000")),
+                new MatDef("PT","CLEAR","클리어코트","KG", new BigDecimal("90000")),
+                new MatDef("AD","3M-ADHESIVE","3M 접착제","EA", new BigDecimal("5000")),
+                new MatDef("TP","AFT-15-1.0","아크릴폼테이프 15mm/1.0mm","M", new BigDecimal("900"))
+        );
+
+        int sIdx = 0;
+        for (MatDef def : catalog) {
+            SupplierCompany sup = suppliers.get(sIdx % suppliers.size());
+            sIdx++;
+            String code = "MAT-" + safeCode(sup.getCompanyCode()) + "-" + def.family + "-" + def.spec;
+
+            Product p = productRepository.findById(code).orElseGet(() -> {
+                Product np = Product.builder()
+                        .id(code)
+                        .productCode(code)
+                        .category("MATERIAL")
+                        .supplierCompany(sup)
+                        .productName(def.name)
+                        .unit(def.uom)
+                        .originPrice(def.price)
+                        .sellingPrice(def.price.multiply(new BigDecimal("1.2")))
+                        .build();
+                return productRepository.save(np);
+            });
+
+            // 재고 upsert
+            ProductStock stock = productStockRepository.findAll().stream()
+                    .filter(ps -> ps.getProduct() != null && ps.getProduct().getId().equals(p.getId()))
+                    .findFirst()
+                    .orElseGet(() -> ProductStock.builder()
+                            .product(p)
+                            .warehouse(materialWarehouse)
+                            .status("NORMAL")
+                            .availableCount(BigDecimal.ZERO)
+                            .safetyCount(new BigDecimal("30"))
+                            .reservedCount(BigDecimal.ZERO)
+                            .build());
+            if (stock.getId() == null) {
+                stock.setAvailableCount(new BigDecimal(100));
+                productStockRepository.save(stock);
+            }
+        }
+
+        log.info("공급사 MATERIAL {}건 적재 완료 (공급사 수: {})", catalog.size(), suppliers.size());
+    }
+
+    /**
+     * 기존 BOM의 MATERIAL을 공급사 MATERIAL로 치환
+     */
+    private void linkBOMMaterialsToSupplierMaterials() {
+        List<SupplierCompany> suppliers = supplierCompanyRepository.findAll();
+        if (suppliers.isEmpty()) return;
+        SupplierCompany sup = suppliers.get(0); // 기준 공급사 한 곳으로 매핑
+
+        // 매핑 테이블: 기존 generic id -> 공급사 MATERIAL 코드
+        java.util.Map<String, String> map = new java.util.HashMap<>();
+        map.put("PROD-AL-PLATE-2T", "MAT-" + safeCode(sup.getCompanyCode()) + "-AL-PLATE-2T");
+        map.put("PROD-PAINT-BLK", "MAT-" + safeCode(sup.getCompanyCode()) + "-PT-BASE-BLK");
+        map.put("PROD-CLIP-STD", "MAT-" + safeCode(sup.getCompanyCode()) + "-PF-CLIP-STD");
+        map.put("PROD-STEEL-FRAME-DOOR", "MAT-" + safeCode(sup.getCompanyCode()) + "-ST-REINF-BAR");
+        map.put("PROD-PAINT-CLEAR", "MAT-" + safeCode(sup.getCompanyCode()) + "-PT-CLEAR");
+        map.put("PROD-ADHESIVE-3M", "MAT-" + safeCode(sup.getCompanyCode()) + "-AD-3M-ADHESIVE");
+
+        List<BomItem> items = bomItemRepository.findAll();
+        int changed = 0;
+        for (BomItem it : items) {
+            if (!"MATERIAL".equalsIgnoreCase(it.getComponentType())) continue;
+            String target = map.get(it.getComponentId());
+            if (target == null) continue;
+            if (productRepository.findById(target).isEmpty()) continue;
+            it.setComponentId(target);
+            bomItemRepository.save(it);
+            changed++;
+        }
+
+        log.info("BOM MATERIAL 치환 완료: {}건", changed);
+    }
+
+    private String safeCode(String s) {
+        if (s == null) return "SUP";
+        return s.replaceAll("[^A-Za-z0-9]", "").toUpperCase();
     }
 
     /**
