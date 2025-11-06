@@ -3,8 +3,10 @@ package org.ever._4ever_be_scm.scm.iv.entity;
 import com.github.f4b6a3.uuid.UuidCreator;
 import lombok.*;
 import org.ever._4ever_be_scm.common.entity.TimeStamp;
+import org.ever._4ever_be_scm.common.jpa.converter.DurationToSecondsConverter;
 
 import jakarta.persistence.*;
+import java.time.Duration;
 
 @NoArgsConstructor
 @AllArgsConstructor
@@ -49,8 +51,9 @@ public class SupplierCompany extends TimeStamp {
     @Column(name = "office_phone")
     private String officePhone;
 
-@Column(name = "delivery_days")
-private Integer deliveryDays;
+    @Column(name = "delivery_days")
+    @Convert(converter = DurationToSecondsConverter.class)
+    private Duration deliveryDays;
 
 @PrePersist
 public void prePersist() {

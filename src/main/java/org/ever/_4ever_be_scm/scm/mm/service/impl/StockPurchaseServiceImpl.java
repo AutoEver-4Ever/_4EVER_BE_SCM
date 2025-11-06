@@ -70,8 +70,8 @@ public class StockPurchaseServiceImpl implements StockPurchaseService {
             .productId(product.getId())
             .count(it.getQuantity())
             .price(product.getOriginPrice())
-            .preferredDeliveryDate(LocalDateTime.now().plusDays(
-                supplierCompany.getDeliveryDays() != null ? supplierCompany.getDeliveryDays() : 4))
+            .preferredDeliveryDate(LocalDateTime.now().plusSeconds(
+                supplierCompany.getDeliveryDays() != null ? supplierCompany.getDeliveryDays().getSeconds() : 4L * 86_400))
             .build();
         productRequestItemRepository.save(requestItem);
     }
