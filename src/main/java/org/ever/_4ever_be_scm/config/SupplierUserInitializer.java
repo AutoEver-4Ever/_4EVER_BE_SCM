@@ -168,6 +168,7 @@ public class SupplierUserInitializer implements CommandLineRunner {
         else leadTimeSeconds = 300 + ((idx - 3) % 6) * 60; // 5~10분 범위
 
         SupplierCompany company = SupplierCompany.builder()
+            .id(userId)           // 공급사 ID를 사용자 ID와 동일하게 고정
             .supplierUser(user)
             .companyCode(companyCode)
             .companyName(companyName)
