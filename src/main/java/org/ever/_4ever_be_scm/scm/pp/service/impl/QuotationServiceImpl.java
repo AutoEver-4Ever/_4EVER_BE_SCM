@@ -319,10 +319,12 @@ public class QuotationServiceImpl implements QuotationService {
                                        currentStock / bomItem.getCount().intValue() : Integer.MAX_VALUE;
                 requirement.updateMaxProductionCapacity(maxProduction);
                 
-                // 공급업체 배송 기간 고려
+                // 공급업체 배송 기간 고려 (seconds -> days floor for LocalDate context)
                 if (componentProduct.getSupplierCompany() != null && 
                     componentProduct.getSupplierCompany().getDeliveryDays() != null) {
-                    requirement.updateMaxDeliveryDays(componentProduct.getSupplierCompany().getDeliveryDays());
+                    int seconds = (int) componentProduct.getSupplierCompany().getDeliveryDays().getSeconds();
+                    int daysFloor = seconds / 86_400;
+                    requirement.updateMaxDeliveryDays(daysFloor);
                 }
                 
             } else if ("ITEM".equals(componentProduct.getCategory())) {
@@ -883,7 +885,8 @@ public class QuotationServiceImpl implements QuotationService {
             int deliveryDays = 0;
             if (component.getSupplierCompany() != null &&
                 component.getSupplierCompany().getDeliveryDays() != null) {
-                deliveryDays = component.getSupplierCompany().getDeliveryDays();
+                int seconds = (int) component.getSupplierCompany().getDeliveryDays().getSeconds();
+                deliveryDays = seconds / 86_400; // floor to day offset
             }
 
             LocalDate procurementStartDate = dueDate.minusDays(deliveryDays);
