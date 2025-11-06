@@ -12,11 +12,13 @@ import org.ever._4ever_be_scm.scm.iv.entity.SupplierUser;
 import org.ever._4ever_be_scm.scm.iv.repository.SupplierCompanyRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.SupplierUserRepository;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@Order(1)
 public class SupplierUserInitializer implements CommandLineRunner {
 
     private final SupplierUserRepository supplierUserRepository;
