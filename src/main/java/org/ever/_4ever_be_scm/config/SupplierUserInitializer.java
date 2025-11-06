@@ -77,9 +77,9 @@ public class SupplierUserInitializer implements CommandLineRunner {
     private static final Map<String, String> ACCOUNT_IDS = Map.ofEntries(
         // base
         Map.entry("supplier-admin@everp.com", "019a3df1-7843-7590-a5fd-94aa9aae7d0a"),
-        // 1..15
+        // 1..15 (Auth AdminInitializer 기준)
         Map.entry("supplier-admin1@everp.com", "019a52d5-2824-7c7e-9826-e5c56987d189"),
-        Map.entry("supplier-admin2@everp.com", "019a52d5-2824-7c7e-9826-e5c56987d189"),
+        Map.entry("supplier-admin2@everp.com", "019a59a5-f5d5-7003-98b0-f8d77df4f031"),
         Map.entry("supplier-admin3@everp.com", "019a52d5-1ad8-754d-af67-e541f85473c4"),
         Map.entry("supplier-admin4@everp.com", "019a52d5-0df8-724b-a16f-7a9d3bcd5384"),
         Map.entry("supplier-admin5@everp.com", "019a52d5-01a5-758a-8d36-e2ef00d8ffb7"),
@@ -138,6 +138,7 @@ public class SupplierUserInitializer implements CommandLineRunner {
         String customerCode = "CUC-" + trailing7(userId);
 
         SupplierUser user = SupplierUser.builder()
+            .id(userId)          // Auth userId와 동일하게 고정
             .userId(userId)
             .supplierUserName(displayName)
             .supplierUserEmail(email)
