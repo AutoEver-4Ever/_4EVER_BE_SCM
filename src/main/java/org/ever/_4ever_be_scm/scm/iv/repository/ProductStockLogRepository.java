@@ -28,17 +28,15 @@ public interface ProductStockLogRepository extends JpaRepository<ProductStockLog
     List<ProductStockLog> findByProductId(@Param("productId") String productId);
 
     /**
-     * 최근 입출고 이력 조회
+     * 최근 입출고 이력 조회 (담당자 무관)
      *
      * @param movementType 입출고 타입 (예: 입고, 출고)
-     * @param createdById 담당자 ID
      * @param pageable 페이징 정보
      * @return 입출고 이력 목록
      */
     @EntityGraph(attributePaths = {"productStock", "productStock.product", "productStock.warehouse"})
-    List<ProductStockLog> findByMovementTypeAndCreatedByIdOrderByCreatedAtDesc(
+    List<ProductStockLog> findByMovementTypeOrderByCreatedAtDesc(
             String movementType,
-            String createdById,
             Pageable pageable);
 
 }

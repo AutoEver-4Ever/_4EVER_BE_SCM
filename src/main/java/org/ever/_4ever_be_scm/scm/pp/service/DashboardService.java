@@ -9,4 +9,5 @@ public interface DashboardService {
     List<DashboardWorkflowItemDto> getPurchaseRequests(String userId, int size);
     List<DashboardWorkflowItemDto> getMmPurchaseOrders(String userId, int size);
     List<DashboardWorkflowItemDto> getInboundDeliveries(String userId, int size);
+    List<DashboardWorkflowItemDto> getOutboundDeliveries(String userId, int size);
 }

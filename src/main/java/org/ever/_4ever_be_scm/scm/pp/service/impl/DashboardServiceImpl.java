@@ -36,6 +36,7 @@ public class DashboardServiceImpl implements DashboardService {
     private static final String DEFAULT_STATUS = "PENDING";
     private static final String DEFAULT_STOCK_STATUS = "UNKNOWN";
     private static final String MOVEMENT_TYPE_INBOUND = "입고";
+    private static final String MOVEMENT_TYPE_OUTBOUND = "출고";
     private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     private final ProductOrderRepository productOrderRepository;
@@ -132,13 +133,22 @@ public class DashboardServiceImpl implements DashboardService {
         int limit = size > 0 ? size : DEFAULT_SIZE;
 
         List<ProductStockLog> inboundLogs = productStockLogRepository
-                .findByMovementTypeAndCreatedByIdOrderByCreatedAtDesc(
-                        MOVEMENT_TYPE_INBOUND,
-                        userId,
-                        PageRequest.of(0, limit)
-                );
+                .findByMovementTypeOrderByCreatedAtDesc(MOVEMENT_TYPE_INBOUND, PageRequest.of(0, limit));
 
         return inboundLogs.stream()
+                .map(this::toStockLogItem)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DashboardWorkflowItemDto> getOutboundDeliveries(String userId, int size) {
+        int limit = size > 0 ? size : DEFAULT_SIZE;
+
+        List<ProductStockLog> outboundLogs = productStockLogRepository
+                .findByMovementTypeOrderByCreatedAtDesc(MOVEMENT_TYPE_OUTBOUND, PageRequest.of(0, limit));
+
+        return outboundLogs.stream()
                 .map(this::toStockLogItem)
                 .toList();
     }

@@ -68,4 +68,16 @@ public class DashboardController {
                 HttpStatus.OK
         );
     }
+
+    @GetMapping("/outbound")
+    public ApiResponse<List<DashboardWorkflowItemDto>> getOutboundDeliveries(
+            @RequestParam("userId") String userId,
+            @RequestParam(value = "size", defaultValue = "5") int size
+    ) {
+        return ApiResponse.success(
+                dashboardService.getOutboundDeliveries(userId, size),
+                "출고 목록 조회 성공",
+                HttpStatus.OK
+        );
+    }
 }
