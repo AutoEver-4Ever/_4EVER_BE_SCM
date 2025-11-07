@@ -49,4 +49,8 @@ public interface ProductOrderRepository extends JpaRepository<ProductOrder, Stri
     Page<ProductOrder> findBySupplierCompanyNameOrderByCreatedAtDesc(String supplierCompanyName, Pageable pageable);
 
     Page<ProductOrder> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
+    java.util.List<ProductOrder> findBySupplierCompanyNameOrderByCreatedAtDesc(String supplierCompanyName);
+
+    java.util.List<ProductOrder> findAllByOrderByCreatedAtDesc();
 }

@@ -24,7 +24,6 @@ import org.ever._4ever_be_scm.scm.pp.integration.port.BusinessQuotationServicePo
 import org.ever._4ever_be_scm.scm.pp.repository.MesRepository;
 import org.ever._4ever_be_scm.scm.pp.service.DashboardService;
 import org.ever._4ever_be_scm.scm.pp.service.dto.DashboardWorkflowItemDto;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +39,7 @@ import java.util.Optional;
 public class DashboardServiceImpl implements DashboardService {
 
     private static final int DEFAULT_SIZE = 5;
+    private static final int MAX_SIZE = 20;
     private static final String DEFAULT_STATUS = "PENDING";
     private static final String DEFAULT_STOCK_STATUS = "UNKNOWN";
     private static final String MOVEMENT_TYPE_INBOUND = "입고";
@@ -61,7 +61,7 @@ public class DashboardServiceImpl implements DashboardService {
     @Override
     @Transactional(readOnly = true)
     public List<DashboardWorkflowItemDto> getSupplierPurchaseOrders(String userId, int size) {
-        int limit = size > 0 ? size : DEFAULT_SIZE;
+        int limit = normalizeSize(size);
 
         // supplier_user에서 user_id로 supplier_user table의 id 조회
         SupplierUser supplierUser = supplierUserRepository.findByUserId(userId)
@@ -83,11 +83,10 @@ public class DashboardServiceImpl implements DashboardService {
 
         // 발주서 테이블(product_order)의 공급사 이름으로 조회하여 공급사에게 할당된 발주서 목록 조회
         List<ProductOrder> orders = productOrderRepository
-                .findBySupplierCompanyNameOrderByCreatedAtDesc(
-                        supplierCompanyName,
-                        PageRequest.of(0, size > 0 ? size : 5)
-                )
-                .getContent();
+                .findBySupplierCompanyNameOrderByCreatedAtDesc(supplierCompanyName)
+                .stream()
+                .limit(limit)
+                .toList();
 
         return orders.stream()
                 .map(order -> DashboardWorkflowItemDto.builder()
@@ -108,11 +107,12 @@ public class DashboardServiceImpl implements DashboardService {
     @Override
     @Transactional(readOnly = true)
     public List<DashboardWorkflowItemDto> getPurchaseRequests(String userId, int size) {
-        int limit = size > 0 ? size : DEFAULT_SIZE;
+        int limit = normalizeSize(size);
 
         return productRequestRepository
-                .findByRequesterIdOrderByCreatedAtDesc(userId, PageRequest.of(0, limit))
+                .findByRequesterIdOrderByCreatedAtDesc(userId)
                 .stream()
+                .limit(limit)
                 .map(this::toPurchaseRequestItem)
                 .toList();
     }
@@ -120,11 +120,12 @@ public class DashboardServiceImpl implements DashboardService {
     @Override
     @Transactional(readOnly = true)
     public List<DashboardWorkflowItemDto> getPurchaseRequestsOverall(int size) {
-        int limit = size > 0 ? size : DEFAULT_SIZE;
+        int limit = normalizeSize(size);
 
         return productRequestRepository
-                .findAllByOrderByCreatedAtDesc(PageRequest.of(0, limit))
+                .findAllByOrderByCreatedAtDesc()
                 .stream()
+                .limit(limit)
                 .map(this::toPurchaseRequestItem)
                 .toList();
     }
@@ -132,11 +133,12 @@ public class DashboardServiceImpl implements DashboardService {
     @Override
     @Transactional(readOnly = true)
     public List<DashboardWorkflowItemDto> getMmPurchaseOrders(int size) {
-        int limit = size > 0 ? size : DEFAULT_SIZE;
+        int limit = normalizeSize(size);
 
         return productOrderRepository
-                .findAllByOrderByCreatedAtDesc(PageRequest.of(0, limit))
+                .findAllByOrderByCreatedAtDesc()
                 .stream()
+                .limit(limit)
                 .map(order -> DashboardWorkflowItemDto.builder()
                         .itemId(order.getId())
                         .itemTitle(order.getSupplierCompanyName())
@@ -151,10 +153,13 @@ public class DashboardServiceImpl implements DashboardService {
     @Override
     @Transactional(readOnly = true)
     public List<DashboardWorkflowItemDto> getInboundDeliveries(String userId, int size) {
-        int limit = size > 0 ? size : DEFAULT_SIZE;
+        int limit = normalizeSize(size);
 
         List<ProductStockLog> inboundLogs = productStockLogRepository
-                .findByMovementTypeOrderByCreatedAtDesc(MOVEMENT_TYPE_INBOUND, PageRequest.of(0, limit));
+                .findByMovementTypeOrderByCreatedAtDesc(MOVEMENT_TYPE_INBOUND)
+                .stream()
+                .limit(limit)
+                .toList();
 
         return inboundLogs.stream()
                 .map(this::toStockLogItem)
@@ -164,10 +169,13 @@ public class DashboardServiceImpl implements DashboardService {
     @Override
     @Transactional(readOnly = true)
     public List<DashboardWorkflowItemDto> getOutboundDeliveries(String userId, int size) {
-        int limit = size > 0 ? size : DEFAULT_SIZE;
+        int limit = normalizeSize(size);
 
         List<ProductStockLog> outboundLogs = productStockLogRepository
-                .findByMovementTypeOrderByCreatedAtDesc(MOVEMENT_TYPE_OUTBOUND, PageRequest.of(0, limit));
+                .findByMovementTypeOrderByCreatedAtDesc(MOVEMENT_TYPE_OUTBOUND)
+                .stream()
+                .limit(limit)
+                .toList();
 
         return outboundLogs.stream()
                 .map(this::toStockLogItem)
@@ -177,7 +185,7 @@ public class DashboardServiceImpl implements DashboardService {
     @Override
     @Transactional(readOnly = true)
     public List<DashboardWorkflowItemDto> getQuotationsToProduction(String userId, int size) {
-        int limit = size > 0 ? size : DEFAULT_SIZE;
+        int limit = normalizeSize(size);
 
         BusinessQuotationListResponseDto response =
                 businessQuotationServicePort.getQuotationList("APPROVAL", LocalDate.now().minusMonths(1), LocalDate.now(), 0, limit);
@@ -190,10 +198,11 @@ public class DashboardServiceImpl implements DashboardService {
     @Override
     @Transactional(readOnly = true)
     public List<DashboardWorkflowItemDto> getProductionInProgress(String userId, int size) {
-        int limit = size > 0 ? size : DEFAULT_SIZE;
+        int limit = normalizeSize(size);
 
-        return mesRepository.findWithFilters(null, "IN_PROGRESS", PageRequest.of(0, limit))
+        return mesRepository.findByStatusOrderByCreatedAtDesc("IN_PROGRESS")
                 .stream()
+                .limit(limit)
                 .map(this::toMesItem)
                 .toList();
     }
@@ -286,5 +295,10 @@ public class DashboardServiceImpl implements DashboardService {
                 .statusCode(Optional.ofNullable(mes.getStatus()).orElse("IN_PROGRESS"))
                 .date(startDateTime != null ? startDateTime.format(ISO_FORMATTER) : null)
                 .build();
+    }
+
+    private int normalizeSize(int size) {
+        int candidate = size > 0 ? size : DEFAULT_SIZE;
+        return Math.min(candidate, MAX_SIZE);
     }
 }

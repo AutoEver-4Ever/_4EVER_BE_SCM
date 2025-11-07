@@ -13,5 +13,9 @@ public interface ProductRequestRepository extends JpaRepository<ProductRequest, 
 
     Page<ProductRequest> findByRequesterIdOrderByCreatedAtDesc(String requesterId, Pageable pageable);
 
+    java.util.List<ProductRequest> findByRequesterIdOrderByCreatedAtDesc(String requesterId);
+
     Page<ProductRequest> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
+    java.util.List<ProductRequest> findAllByOrderByCreatedAtDesc();
 }

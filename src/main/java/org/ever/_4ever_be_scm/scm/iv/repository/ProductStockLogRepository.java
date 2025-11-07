@@ -39,4 +39,7 @@ public interface ProductStockLogRepository extends JpaRepository<ProductStockLog
             String movementType,
             Pageable pageable);
 
+    @EntityGraph(attributePaths = {"productStock", "productStock.product", "productStock.warehouse"})
+    List<ProductStockLog> findByMovementTypeOrderByCreatedAtDesc(String movementType);
+
 }
