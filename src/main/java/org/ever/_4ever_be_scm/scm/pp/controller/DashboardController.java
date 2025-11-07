@@ -56,4 +56,16 @@ public class DashboardController {
                 HttpStatus.OK
         );
     }
+
+    @GetMapping("/inbound")
+    public ApiResponse<List<DashboardWorkflowItemDto>> getInboundDeliveries(
+            @RequestParam("userId") String userId,
+            @RequestParam(value = "size", defaultValue = "5") int size
+    ) {
+        return ApiResponse.success(
+                dashboardService.getInboundDeliveries(userId, size),
+                "입고 목록 조회 성공",
+                HttpStatus.OK
+        );
+    }
 }

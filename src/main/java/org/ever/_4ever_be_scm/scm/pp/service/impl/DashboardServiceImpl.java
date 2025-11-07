@@ -3,8 +3,12 @@ package org.ever._4ever_be_scm.scm.pp.service.impl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ever._4ever_be_scm.scm.iv.entity.Product;
+import org.ever._4ever_be_scm.scm.iv.entity.ProductStock;
+import org.ever._4ever_be_scm.scm.iv.entity.ProductStockLog;
 import org.ever._4ever_be_scm.scm.iv.entity.SupplierCompany;
 import org.ever._4ever_be_scm.scm.iv.entity.SupplierUser;
+import org.ever._4ever_be_scm.scm.iv.entity.Warehouse;
+import org.ever._4ever_be_scm.scm.iv.repository.ProductStockLogRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.SupplierCompanyRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.SupplierUserRepository;
 import org.ever._4ever_be_scm.scm.mm.entity.ProductOrder;
@@ -30,6 +34,8 @@ public class DashboardServiceImpl implements DashboardService {
 
     private static final int DEFAULT_SIZE = 5;
     private static final String DEFAULT_STATUS = "PENDING";
+    private static final String DEFAULT_STOCK_STATUS = "UNKNOWN";
+    private static final String MOVEMENT_TYPE_INBOUND = "입고";
     private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     private final ProductOrderRepository productOrderRepository;
@@ -38,6 +44,7 @@ public class DashboardServiceImpl implements DashboardService {
     private final SupplierCompanyRepository supplierCompanyRepository;
     private final ProductRepository productRepository;
     private final ProductOrderApprovalRepository productOrderApprovalRepository;
+    private final ProductStockLogRepository productStockLogRepository;
     private final DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     // 특정 공급사의 발주서 조회
@@ -119,6 +126,23 @@ public class DashboardServiceImpl implements DashboardService {
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<DashboardWorkflowItemDto> getInboundDeliveries(String userId, int size) {
+        int limit = size > 0 ? size : DEFAULT_SIZE;
+
+        List<ProductStockLog> inboundLogs = productStockLogRepository
+                .findByMovementTypeAndCreatedByIdOrderByCreatedAtDesc(
+                        MOVEMENT_TYPE_INBOUND,
+                        userId,
+                        PageRequest.of(0, limit)
+                );
+
+        return inboundLogs.stream()
+                .map(this::toStockLogItem)
+                .toList();
+    }
+
     private DashboardWorkflowItemDto toPurchaseRequestItem(ProductRequest request) {
         return DashboardWorkflowItemDto.builder()
                 .itemId(request.getId())
@@ -144,5 +168,27 @@ public class DashboardServiceImpl implements DashboardService {
 
     private String formatDate(java.time.LocalDateTime datetime) {
         return datetime != null ? datetime.format(ISO_FORMATTER) : null;
+    }
+
+    private DashboardWorkflowItemDto toStockLogItem(ProductStockLog stockLog) {
+        ProductStock productStock = stockLog.getProductStock();
+        Product product = productStock != null ? productStock.getProduct() : null;
+        Warehouse warehouse = productStock != null ? productStock.getWarehouse() : null;
+
+        String itemTitle = product != null ? product.getProductName() : "입고 처리";
+        String itemNumber = Optional.ofNullable(stockLog.getReferenceCode()).orElse(stockLog.getId());
+        String warehouseName = warehouse != null ? warehouse.getWarehouseName() : null;
+        String statusCode = productStock != null && productStock.getStatus() != null
+                ? productStock.getStatus()
+                : DEFAULT_STOCK_STATUS;
+
+        return DashboardWorkflowItemDto.builder()
+                .itemId(stockLog.getId())
+                .itemTitle(itemTitle)
+                .itemNumber(itemNumber)
+                .name(warehouseName)
+                .statusCode(statusCode)
+                .date(formatDate(stockLog.getCreatedAt()))
+                .build();
     }
 }
