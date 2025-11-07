@@ -1,0 +1,10 @@
+package org.ever._4ever_be_scm.scm.pp.service;
+
+import org.ever._4ever_be_scm.scm.pp.service.dto.DashboardWorkflowItemDto;
+
+import java.util.List;
+
+public interface DashboardService {
+    List<DashboardWorkflowItemDto> getSupplierPurchaseOrders(String userId, int size);
+    List<DashboardWorkflowItemDto> getPurchaseRequests(String userId, int size);
+}

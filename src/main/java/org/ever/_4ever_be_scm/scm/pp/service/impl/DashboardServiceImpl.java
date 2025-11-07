@@ -1,0 +1,95 @@
+package org.ever._4ever_be_scm.scm.pp.service.impl;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.ever._4ever_be_scm.scm.iv.entity.Product;
+import org.ever._4ever_be_scm.scm.iv.entity.SupplierCompany;
+import org.ever._4ever_be_scm.scm.iv.entity.SupplierUser;
+import org.ever._4ever_be_scm.scm.iv.repository.SupplierCompanyRepository;
+import org.ever._4ever_be_scm.scm.iv.repository.SupplierUserRepository;
+import org.ever._4ever_be_scm.scm.mm.entity.ProductOrder;
+import org.ever._4ever_be_scm.scm.mm.entity.ProductOrderApproval;
+import org.ever._4ever_be_scm.scm.mm.entity.ProductRequest;
+import org.ever._4ever_be_scm.scm.mm.repository.ProductOrderApprovalRepository;
+import org.ever._4ever_be_scm.scm.mm.repository.ProductOrderRepository;
+import org.ever._4ever_be_scm.scm.mm.repository.ProductRequestRepository;
+import org.ever._4ever_be_scm.scm.pp.service.DashboardService;
+import org.ever._4ever_be_scm.scm.pp.service.dto.DashboardWorkflowItemDto;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Optional;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class DashboardServiceImpl implements DashboardService {
+
+    private static final int DEFAULT_SIZE = 5;
+    private static final String DEFAULT_STATUS = "PENDING";
+    private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+
+    private final ProductOrderRepository productOrderRepository;
+    private final ProductRequestRepository productRequestRepository;
+    private final SupplierUserRepository supplierUserRepository;
+    private final SupplierCompanyRepository supplierCompanyRepository;
+    private final ProductRepository productRepository;
+    private final ProductOrderApprovalRepository productOrderApprovalRepository;
+    DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+
+    // 특정 공급사의 발주서 조회
+    @Override
+    @Transactional(readOnly = true)
+    public List<DashboardWorkflowItemDto> getSupplierPurchaseOrders(String userId, int size) {
+        int limit = size > 0 ? size : DEFAULT_SIZE;
+
+        // supplier_user에서 user_id로 supplier_user table의 id 조회
+        SupplierUser supplierUser = supplierUserRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 userId와 일치하는 사용자가 없습니다."));
+        String supplierUserId = supplierUser.getId();
+
+        // supplier_company의 supplier_user_id를 조회하여 공급사의 이름(supplier_company_name)을 조회
+        SupplierCompany supplierCompany = supplierCompanyRepository.findByCompanyName(supplierUserId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 공급사의 담당자와 연결된 공급사가 없습니다."));
+        String supplierCompanyName = supplierCompany.getCompanyName();
+        log.info("[INFO][SUP] 조회한 공급사의 이름: {}", supplierCompanyName);
+
+        // itemTitle용 제품 이름 조회
+        // product에 supplier_company_id가있음.
+        // 공급사 ID
+        String supplierCompanyId = supplierCompany.getId();
+        Product productName = productRepository.getProductNameBySupplierCompanyId(supplierCompanyId);
+
+        // 발주서 테이블(product_order)의 공급사 이름으로 조회하여 공급사에게 할당된 발주서 목록 조회
+        List<ProductOrder> orders = productOrderRepository
+                .findBySupplierCompanyNameOrderByCreatedAtDesc(
+                        supplierCompanyName,
+                        PageRequest.of(0, size > 0 ? size : 5)
+                )
+                .getContent();
+
+        return orders.stream()
+                .map(order -> DashboardWorkflowItemDto.builder()
+                        .itemId(order.getId())
+                        .itemTitle(productName + " 발주")
+                        .itemNumber(order.getProductOrderCode())
+                        .name(supplierCompanyName)
+                        .statusCode(Optional.ofNullable(order.getApprovalId())
+                                .map(ProductOrderApproval::getApprovalStatus)
+                                .orElse("PENDING"))
+                        .date(order.getCreatedAt() != null ?
+                                order.getCreatedAt().format(formatter) : null)
+                        .build())
+                .toList();
+    }
+
+    @Override
+    public List<DashboardWorkflowItemDto> getPurchaseRequests(String userId, int size) {
+        return List.of();
+    }
+}
+
+

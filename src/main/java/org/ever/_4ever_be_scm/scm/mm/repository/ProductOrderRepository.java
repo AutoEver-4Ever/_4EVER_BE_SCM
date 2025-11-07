@@ -45,4 +45,6 @@ public interface ProductOrderRepository extends JpaRepository<ProductOrder, Stri
      * @return 해당 상태의 ProductOrder 개수
      */
     long countByApprovalId_ApprovalStatus(String approvalStatus);
+
+    Page<ProductOrder> findBySupplierCompanyNameOrderByCreatedAtDesc(String supplierCompanyName, Pageable pageable);
 }
