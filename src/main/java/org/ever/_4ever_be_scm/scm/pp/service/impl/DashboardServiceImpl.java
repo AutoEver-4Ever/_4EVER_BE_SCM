@@ -20,6 +20,7 @@ import org.ever._4ever_be_scm.scm.mm.repository.ProductRequestRepository;
 import org.ever._4ever_be_scm.scm.pp.integration.dto.BusinessQuotationDto;
 import org.ever._4ever_be_scm.scm.pp.integration.dto.BusinessQuotationListResponseDto;
 import org.ever._4ever_be_scm.scm.pp.integration.port.BusinessQuotationServicePort;
+import org.ever._4ever_be_scm.scm.pp.repository.MesRepository;
 import org.ever._4ever_be_scm.scm.pp.service.DashboardService;
 import org.ever._4ever_be_scm.scm.pp.service.dto.DashboardWorkflowItemDto;
 import org.springframework.data.domain.PageRequest;
@@ -27,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
@@ -51,6 +53,7 @@ public class DashboardServiceImpl implements DashboardService {
     private final ProductOrderApprovalRepository productOrderApprovalRepository;
     private final ProductStockLogRepository productStockLogRepository;
     private final BusinessQuotationServicePort businessQuotationServicePort;
+    private final MesRepository mesRepository;
     private final DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     // 특정 공급사의 발주서 조회
@@ -171,6 +174,17 @@ public class DashboardServiceImpl implements DashboardService {
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<DashboardWorkflowItemDto> getProductionInProgress(String userId, int size) {
+        int limit = size > 0 ? size : DEFAULT_SIZE;
+
+        return mesRepository.findWithFilters(null, "IN_PROGRESS", PageRequest.of(0, limit))
+                .stream()
+                .map(this::toMesItem)
+                .toList();
+    }
+
     private DashboardWorkflowItemDto toPurchaseRequestItem(ProductRequest request) {
         return DashboardWorkflowItemDto.builder()
                 .itemId(request.getId())
@@ -236,6 +250,28 @@ public class DashboardServiceImpl implements DashboardService {
                 .name(customerName)
                 .statusCode(statusCode != null ? statusCode : DEFAULT_STATUS)
                 .date(dueDate)
+                .build();
+    }
+
+    private DashboardWorkflowItemDto toMesItem(org.ever._4ever_be_scm.scm.pp.entity.Mes mes) {
+        String productName = Optional.ofNullable(mes.getProductId())
+                .flatMap(productRepository::findById)
+                .map(Product::getProductName)
+                .orElse("생산 작업");
+
+        String title = productName + " · MES 작업";
+
+        LocalDateTime startDateTime = mes.getStartDate() != null
+                ? mes.getStartDate().atStartOfDay()
+                : mes.getCreatedAt();
+
+        return DashboardWorkflowItemDto.builder()
+                .itemId(mes.getId())
+                .itemTitle(title)
+                .itemNumber(mes.getMesNumber())
+                .name(mes.getQuotationId())
+                .statusCode(Optional.ofNullable(mes.getStatus()).orElse("IN_PROGRESS"))
+                .date(startDateTime != null ? startDateTime.format(ISO_FORMATTER) : null)
                 .build();
     }
 }

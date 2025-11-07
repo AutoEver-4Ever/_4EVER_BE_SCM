@@ -33,4 +33,17 @@ public class ProductionDashboardController {
         List<DashboardWorkflowItemDto> items = dashboardService.getQuotationsToProduction(userId, size);
         return ApiResponse.success(items, "생산 전환 견적 목록을 조회했습니다.", HttpStatus.OK);
     }
+
+    /**
+     * 생산 진행(MES) 목록 조회
+     */
+    @GetMapping("/production/in-progress")
+    public ApiResponse<List<DashboardWorkflowItemDto>> getProductionInProgress(
+            @RequestParam("userId") String userId,
+            @RequestParam(value = "size", defaultValue = "5") int size
+    ) {
+        log.info("[SCM-PP][Dashboard] 생산 진행 목록 조회 - userId: {}, size: {}", userId, size);
+        List<DashboardWorkflowItemDto> items = dashboardService.getProductionInProgress(userId, size);
+        return ApiResponse.success(items, "생산 진행 목록을 조회했습니다.", HttpStatus.OK);
+    }
 }
