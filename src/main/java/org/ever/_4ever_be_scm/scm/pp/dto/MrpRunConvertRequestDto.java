@@ -27,7 +27,8 @@ public class MrpRunConvertRequestDto {
     @AllArgsConstructor
     @Builder
     public static class MrpItemRequest {
-        private String itemId;  // productId
+        private String quotationId;  // 견적 ID (필수!)
+        private String itemId;       // productId
         private BigDecimal quantity;
     }
 }

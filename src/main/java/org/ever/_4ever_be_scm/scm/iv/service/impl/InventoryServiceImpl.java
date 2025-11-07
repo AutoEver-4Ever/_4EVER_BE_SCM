@@ -10,6 +10,7 @@ import org.ever._4ever_be_scm.scm.iv.dto.ShortageItemDto;
 import org.ever._4ever_be_scm.scm.iv.dto.ShortageItemPreviewDto;
 import org.ever._4ever_be_scm.scm.iv.dto.StockMovementDto;
 import org.ever._4ever_be_scm.scm.iv.dto.request.AddInventoryItemRequest;
+import org.ever._4ever_be_scm.scm.iv.dto.response.ItemInfoResponseDto;
 import org.ever._4ever_be_scm.scm.iv.dto.response.ItemToggleResponseDto;
 import org.ever._4ever_be_scm.scm.iv.entity.*;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductStockLogRepository;
@@ -377,6 +378,33 @@ public class InventoryServiceImpl implements InventoryService {
             default:
                 return "기타";
         }
+    }
+
+    /**
+     * 제품 정보 목록 조회
+     */
+    @Override
+    public List<ItemInfoResponseDto> getItemInfoList(List<String> itemIds) {
+        List<Product> products = productRepository.findAllById(itemIds);
+        
+        return products.stream()
+                .map(this::mapToItemInfoResponseDto)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Product 엔티티를 ItemInfoResponseDto로 변환
+     */
+    private ItemInfoResponseDto mapToItemInfoResponseDto(Product product) {
+        SupplierCompany supplierCompany = product.getSupplierCompany();
+        
+        return ItemInfoResponseDto.builder()
+                .itemId(product.getId())
+                .itemName(product.getProductName())
+                .itemNumber(product.getProductCode())
+                .unitPrice(product.getOriginPrice())
+                .supplierName(supplierCompany != null ? supplierCompany.getCompanyName() : "미지정")
+                .build();
     }
 
 }

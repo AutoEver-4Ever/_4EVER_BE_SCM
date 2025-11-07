@@ -60,7 +60,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         
         // DTO 변환
         List<SalesOrderDto> salesOrders = sdResponse.getContent().stream()
-                .map(this::convertToSalesOrderDto)
+                .map(this::convertToInProductionDto)
                 .collect(Collectors.toList());
         
         // 페이지 정보 매핑
@@ -86,7 +86,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         
         // DTO 변환
         List<SalesOrderDto> salesOrders = sdResponse.getContent().stream()
-                .map(this::convertToSalesOrderDto)
+                .map(this::convertToReadyForShipmentDto)
                 .collect(Collectors.toList());
         
         // 페이지 정보 매핑
@@ -126,7 +126,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     /**
      * SD 서비스의 주문 DTO를 내부 DTO로 변환
      */
-    private SalesOrderDto convertToSalesOrderDto(SdOrderDto sdOrder) {
+    private SalesOrderDto convertToInProductionDto(SdOrderDto sdOrder) {
         return SalesOrderDto.builder()
                 .salesOrderId(sdOrder.getSalesOrderId())
                 .salesOrderNumber(sdOrder.getSalesOrderNumber())
@@ -135,6 +135,21 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 .dueDate(sdOrder.getDueDate())
                 .totalAmount(sdOrder.getTotalAmount())
                 .statusCode("IN_PRODUCTION")
+                .build();
+    }
+
+    /**
+     * SD 서비스의 주문 DTO를 내부 DTO로 변환
+     */
+    private SalesOrderDto convertToReadyForShipmentDto(SdOrderDto sdOrder) {
+        return SalesOrderDto.builder()
+                .salesOrderId(sdOrder.getSalesOrderId())
+                .salesOrderNumber(sdOrder.getSalesOrderNumber())
+                .customerName(sdOrder.getCustomerName())
+                .orderDate(sdOrder.getOrderDate())
+                .dueDate(sdOrder.getDueDate())
+                .totalAmount(sdOrder.getTotalAmount())
+                .statusCode("READY_FOR_SHIPMENT")
                 .build();
     }
     

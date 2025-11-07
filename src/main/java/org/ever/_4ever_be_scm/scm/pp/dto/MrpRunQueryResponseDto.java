@@ -35,6 +35,7 @@ public class MrpRunQueryResponseDto {
     @Builder
     public static class MrpRunItemDto {
         private String mrpRunId;
+        private String itemId;
         private String quotationNumber;
         private String itemName;
         private BigDecimal quantity;

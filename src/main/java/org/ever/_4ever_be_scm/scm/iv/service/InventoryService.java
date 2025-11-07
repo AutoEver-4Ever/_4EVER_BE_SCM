@@ -6,8 +6,8 @@ import org.ever._4ever_be_scm.scm.iv.dto.PagedResponseDto;
 import org.ever._4ever_be_scm.scm.iv.dto.ShortageItemDto;
 import org.ever._4ever_be_scm.scm.iv.dto.ShortageItemPreviewDto;
 import org.ever._4ever_be_scm.scm.iv.dto.request.AddInventoryItemRequest;
+import org.ever._4ever_be_scm.scm.iv.dto.response.ItemInfoResponseDto;
 import org.ever._4ever_be_scm.scm.iv.dto.response.ItemToggleResponseDto;
-import org.ever._4ever_be_scm.scm.iv.vo.InventoryFilterVo;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -77,4 +77,12 @@ public interface InventoryService {
      * @return 재고에 존재하지 않는 자재 품목 목록
      */
     List<ItemToggleResponseDto> getItemToggleList();
+    
+    /**
+     * 제품 정보 목록 조회
+     * 
+     * @param itemIds 제품 ID 목록
+     * @return 제품 정보 목록
+     */
+    List<ItemInfoResponseDto> getItemInfoList(List<String> itemIds);
 }

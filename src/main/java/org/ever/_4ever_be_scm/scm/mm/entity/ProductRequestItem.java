@@ -46,6 +46,12 @@ public class ProductRequestItem extends TimeStamp {
     @Column(name = "etc", length = 255)
     private String etc;
 
+    /**
+     * MRP Run ID (MRP에서 생성된 구매요청인 경우에만)
+     */
+    @Column(name = "mrp_run_id")
+    private String mrpRunId;
+
     @PrePersist
     public void prePersist() {
         if (id == null) {

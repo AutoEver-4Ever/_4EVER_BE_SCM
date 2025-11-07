@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionService {
-    
+
     private final ProductRequestRepository productRequestRepository;
     private final ProductRequestItemRepository productRequestItemRepository;
     private final ProductRequestApprovalRepository productRequestApprovalRepository;
@@ -39,6 +39,7 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
     private final ProductRepository productRepository;
     private final SupplierCompanyRepository supplierCompanyRepository;
     private final InternalUserServicePort internalUserServicePort;
+    private final org.ever._4ever_be_scm.scm.pp.repository.MrpRunRepository mrpRunRepository;
 
     @Override
     @Transactional
@@ -279,7 +280,7 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
     public void approvePurchaseRequisition(String purchaseRequisitionId,String requesterId) {
         ProductRequest productRequest = productRequestRepository.findById(purchaseRequisitionId)
                 .orElseThrow(() -> new IllegalArgumentException("구매요청서를 찾을 수 없습니다."));
-        
+
         // 1. 승인 상태 변경
         ProductRequestApproval approval = productRequest.getApprovalId();
 
@@ -290,8 +291,19 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
                 .build();
 
         productRequestApprovalRepository.save(updatedApproval);
-        
-        // 2. 발주서 자동 생성
+
+        // 2. ✅ MRP Run 상태 업데이트 (mrpRunId가 있는 경우만)
+        List<ProductRequestItem> items = productRequestItemRepository.findByProductRequestId(purchaseRequisitionId);
+        for (ProductRequestItem item : items) {
+            if (item.getMrpRunId() != null) {
+                org.ever._4ever_be_scm.scm.pp.entity.MrpRun mrpRun = mrpRunRepository.findById(item.getMrpRunId())
+                    .orElseThrow(() -> new RuntimeException("MRP Run을 찾을 수 없습니다: " + item.getMrpRunId()));
+                mrpRun.setStatus("REQUEST_APPROVED");  // 구매요청 승인됨
+                mrpRunRepository.save(mrpRun);
+            }
+        }
+
+        // 3. 발주서 자동 생성
         createPurchaseOrderFromRequest(productRequest);
     }
 
@@ -396,6 +408,7 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
                         .count(requestItem.getCount())
                         .unit(requestItem.getUnit())
                         .price(requestItem.getPrice())
+                        .mrpRunId(requestItem.getMrpRunId())  // ✅ MRP Run ID 전달 (nullable)
                         .build();
                 productOrderItemRepository.save(orderItem);
             }

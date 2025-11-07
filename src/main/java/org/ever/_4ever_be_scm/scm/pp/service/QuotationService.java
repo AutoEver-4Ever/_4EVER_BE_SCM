@@ -48,4 +48,9 @@ public interface QuotationService {
      * BOM 목록 조회 (bomId와 productName)
      */
     List<ToggleCodeLabelDto> getBomList();
+
+    /**
+     * MRP에 존재하는 견적 목록 조회 (quotationId와 quotationNumber)
+     */
+    List<ToggleCodeLabelDto> getMrpQuotationList();
 }

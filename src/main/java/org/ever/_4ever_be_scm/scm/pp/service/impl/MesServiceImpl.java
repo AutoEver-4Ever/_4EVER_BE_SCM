@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.async.DeferredResult;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -83,22 +84,37 @@ public class MesServiceImpl implements MesService {
                     .findByMesIdOrderBySequenceAsc(mes.getId());
 
             List<String> sequence = new ArrayList<>();
-            String currentOperation = null;
+            Integer currentOperation = null;
+            boolean hasInProgress = false;
+            boolean allCompleted = true;
 
             for (MesOperationLog log : operationLogs) {
                 Operation operation = operationRepository.findById(log.getOperationId()).orElse(null);
                 if (operation != null) {
                     sequence.add(operation.getOpCode());
 
+                    // 진행중인 공정이 있으면 그 공정의 sequence 번호 저장
                     if ("IN_PROGRESS".equals(log.getStatus())) {
-                        currentOperation = operation.getOpCode();
+                        currentOperation = log.getSequence();
+                        hasInProgress = true;
+                    }
+
+                    // 완료되지 않은 공정이 있으면 allCompleted = false
+                    if (!"COMPLETED".equals(log.getStatus())) {
+                        allCompleted = false;
                     }
                 }
             }
 
-            // 현재 공정이 없고 PENDING 상태면 첫 공정
-            if (currentOperation == null && !sequence.isEmpty() && "PENDING".equals(mes.getStatus())) {
-                currentOperation = sequence.get(0);
+            // 진행중인 공정이 없으면 상태에 따라 결정
+            if (!hasInProgress) {
+                if (allCompleted && !operationLogs.isEmpty()) {
+                    // 모두 완료되면 0
+                    currentOperation = 0;
+                } else {
+                    // 모두 대기중이거나 일부 대기중이면 1
+                    currentOperation = 1;
+                }
             }
 
             MesQueryResponseDto.MesItemDto itemDto = MesQueryResponseDto.MesItemDto.builder()
@@ -166,6 +182,7 @@ public class MesServiceImpl implements MesService {
             // }
 
             MesDetailResponseDto.OperationDto operationDto = MesDetailResponseDto.OperationDto.builder()
+                    .mesOperationLogId(log.getId())  // MesOperationLog의 ID 반환
                     .operationNumber(operation.getOpCode())
                     .operationName(operation.getOpName())
                     .sequence(log.getSequence())
@@ -181,6 +198,42 @@ public class MesServiceImpl implements MesService {
             if ("IN_PROGRESS".equals(log.getStatus())) {
                 currentOperation = operation.getOpCode();
             }
+        }
+
+        // 3-1. 각 공정의 버튼 활성화 여부 계산
+        for (int i = 0; i < operations.size(); i++) {
+            MesDetailResponseDto.OperationDto operation = operations.get(i);
+            String status = operation.getStatusCode();
+
+            // 공정 시작 버튼 활성화 조건
+            boolean canStart = false;
+            if ("PENDING".equals(status)) {
+                if (i == 0) {
+                    // 첫 번째 공정: MES가 IN_PROGRESS이면 시작 가능
+                    canStart = "IN_PROGRESS".equals(mes.getStatus());
+                } else {
+                    // 나머지 공정: 이전 공정이 COMPLETED이면 시작 가능
+                    MesDetailResponseDto.OperationDto prevOperation = operations.get(i - 1);
+                    canStart = "COMPLETED".equals(prevOperation.getStatusCode());
+                }
+            }
+
+            // 공정 완료 버튼 활성화 조건
+            boolean canComplete = "IN_PROGRESS".equals(status);
+
+            operation.setCanStart(canStart);
+            operation.setCanComplete(canComplete);
+        }
+
+        // 3-2. MES 버튼 활성화 여부 계산
+        boolean canStartMes = "PENDING".equals(mes.getStatus());
+
+        boolean canCompleteMes = false;
+        if ("IN_PROGRESS".equals(mes.getStatus())) {
+            // 모든 공정이 COMPLETED인지 확인
+            boolean allCompleted = operations.stream()
+                    .allMatch(op -> "COMPLETED".equals(op.getStatusCode()));
+            canCompleteMes = allCompleted;
         }
 
         // 4. Plan 정보
@@ -201,6 +254,8 @@ public class MesServiceImpl implements MesService {
                 .plan(plan)
                 .currentOperation(currentOperation)
                 .operations(operations)
+                .canStartMes(canStartMes)
+                .canCompleteMes(canCompleteMes)
                 .build();
     }
 
@@ -235,6 +290,8 @@ public class MesServiceImpl implements MesService {
 
             // 3. MES 상태 변경
             mes.setStatus("IN_PROGRESS");
+            mes.setStartDate(LocalDate.now());
+            mes.setEndDate(null);
             mesRepository.save(mes);
 
             // 4. 자재 소비
@@ -271,74 +328,80 @@ public class MesServiceImpl implements MesService {
 
     @Override
     @Transactional
-    public void startOperation(String mesId, String operationId, String managerId) {
-        log.info("공정 시작: mesId={}, operationId={}, managerId={}", mesId, operationId, managerId);
+    public void startOperation(String mesId, String logId, String managerId) {
+        log.info("공정 시작: mesId={}, logId={}, managerId={}", mesId, logId, managerId);
 
         // 1. MES 조회
         Mes mes = mesRepository.findById(mesId)
                 .orElseThrow(() -> new RuntimeException("MES를 찾을 수 없습니다: " + mesId));
 
-        // 2. MesOperationLog 조회
-        List<MesOperationLog> operationLogs = mesOperationLogRepository.findByMesIdOrderBySequenceAsc(mesId);
-        MesOperationLog targetLog = operationLogs.stream()
-                .filter(log -> operationId.equals(log.getOperationId()))
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("공정을 찾을 수 없습니다: " + operationId));
+        // 2. MesOperationLog 직접 조회 (logId로)
+        MesOperationLog targetLog = mesOperationLogRepository.findById(logId)
+                .orElseThrow(() -> new RuntimeException("공정 로그를 찾을 수 없습니다: " + logId));
+
+        // 3. mesId 검증
+        if (!mesId.equals(targetLog.getMesId())) {
+            throw new RuntimeException("해당 공정은 이 MES에 속하지 않습니다: mesId=" + mesId + ", logId=" + logId);
+        }
 
         if (!"PENDING".equals(targetLog.getStatus())) {
             throw new RuntimeException("PENDING 상태의 공정만 시작할 수 있습니다. 현재 상태: " + targetLog.getStatus());
         }
 
-        // 3. 이전 공정들이 모두 완료되었는지 확인
+        // 4. 이전 공정들이 모두 완료되었는지 확인
+        List<MesOperationLog> operationLogs = mesOperationLogRepository.findByMesIdOrderBySequenceAsc(mesId);
         for (MesOperationLog log : operationLogs) {
             if (log.getSequence() < targetLog.getSequence() && !"COMPLETED".equals(log.getStatus())) {
                 throw new RuntimeException("이전 공정이 완료되지 않았습니다. sequence: " + log.getSequence());
             }
         }
 
-        // 4. 공정 시작
+        // 5. 공정 시작
         targetLog.start(managerId);
         mesOperationLogRepository.save(targetLog);
 
-        // 5. MES의 currentOperationId 업데이트
-        mes.setCurrentOperationId(operationId);
+        // 6. MES의 currentOperationId 업데이트
+        mes.setCurrentOperationId(targetLog.getOperationId());
         mesRepository.save(mes);
 
-        log.info("공정 시작 완료: operationId={}, status=IN_PROGRESS", operationId);
+        log.info("공정 시작 완료: logId={}, operationId={}, status=IN_PROGRESS", logId, targetLog.getOperationId());
     }
 
     @Override
     @Transactional
-    public void completeOperation(String mesId, String operationId) {
-        log.info("공정 완료: mesId={}, operationId={}", mesId, operationId);
+    public void completeOperation(String mesId, String logId) {
+        log.info("공정 완료: mesId={}, logId={}", mesId, logId);
 
         // 1. MES 조회
         Mes mes = mesRepository.findById(mesId)
                 .orElseThrow(() -> new RuntimeException("MES를 찾을 수 없습니다: " + mesId));
 
-        // 2. MesOperationLog 조회
-        List<MesOperationLog> operationLogs = mesOperationLogRepository.findByMesIdOrderBySequenceAsc(mesId);
-        MesOperationLog targetLog = operationLogs.stream()
-                .filter(log -> operationId.equals(log.getOperationId()))
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("공정을 찾을 수 없습니다: " + operationId));
+        // 2. MesOperationLog 직접 조회 (logId로)
+        MesOperationLog targetLog = mesOperationLogRepository.findById(logId)
+                .orElseThrow(() -> new RuntimeException("공정 로그를 찾을 수 없습니다: " + logId));
+
+        // 3. mesId 검증
+        if (!mesId.equals(targetLog.getMesId())) {
+            throw new RuntimeException("해당 공정은 이 MES에 속하지 않습니다: mesId=" + mesId + ", logId=" + logId);
+        }
 
         if (!"IN_PROGRESS".equals(targetLog.getStatus())) {
             throw new RuntimeException("IN_PROGRESS 상태의 공정만 완료할 수 있습니다. 현재 상태: " + targetLog.getStatus());
         }
 
-        // 3. 공정 완료
+        // 4. 공정 완료
         targetLog.complete();
         mesOperationLogRepository.save(targetLog);
 
-        // 4. 진행률 계산 및 업데이트
+        // 5. 진행률 계산 및 업데이트
+        List<MesOperationLog> operationLogs = mesOperationLogRepository.findByMesIdOrderBySequenceAsc(mesId);
         long completedCount = operationLogs.stream()
                 .filter(log -> "COMPLETED".equals(log.getStatus()))
                 .count();
         int progressRate = (int) ((completedCount * 100) / operationLogs.size());
         mes.setProgressRate(progressRate);
 
-        // 5. 다음 공정이 있으면 currentOperationId 업데이트, 없으면 null
+        // 6. 다음 공정이 있으면 currentOperationId 업데이트, 없으면 null
         MesOperationLog nextLog = operationLogs.stream()
                 .filter(log -> log.getSequence() > targetLog.getSequence())
                 .filter(log -> "PENDING".equals(log.getStatus()))
@@ -353,7 +416,8 @@ public class MesServiceImpl implements MesService {
 
         mesRepository.save(mes);
 
-        log.info("공정 완료: operationId={}, status=COMPLETED, progressRate={}%", operationId, progressRate);
+        log.info("공정 완료: logId={}, operationId={}, status=COMPLETED, progressRate={}%",
+                logId, targetLog.getOperationId(), progressRate);
     }
 
     @Override
@@ -406,7 +470,7 @@ public class MesServiceImpl implements MesService {
                     .toList();
 
             boolean allMesCompleted = allMesForQuotation.stream()
-                    .allMatch(m -> "COMPLETED".equals(m.getStatus()) || "SKIP".equals(m.getStatus()));
+                    .allMatch(m -> "COMPLETED".equals(m.getStatus()));
 
             log.info("Quotation MES 상태 확인: quotationId={}, 전체MES={}, 완료여부={}",
                     quotationId, allMesForQuotation.size(), allMesCompleted);

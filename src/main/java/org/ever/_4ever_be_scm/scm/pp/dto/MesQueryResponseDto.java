@@ -33,7 +33,7 @@ public class MesQueryResponseDto {
         private String quotationId;
         private String quotationNumber;
         private String status;
-        private String currentOperation;
+        private Integer currentOperation;
         private LocalDate startDate;
         private LocalDate endDate;
         private Integer progressRate;

@@ -12,7 +12,7 @@ import java.util.List;
 public class BusinessQuotationListResponseDto {
     private long total;
     private List<BusinessQuotationDto> content;
-    private BusinessPageInfo pageInfo;
+    private BusinessPageInfo page;
     
     @Getter
     @NoArgsConstructor

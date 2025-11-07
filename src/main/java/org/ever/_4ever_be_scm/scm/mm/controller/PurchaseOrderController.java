@@ -14,6 +14,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.async.DeferredResult;
 
 import java.time.LocalDate;
 
@@ -63,20 +64,14 @@ public class PurchaseOrderController {
     }
 
     /**
-     * 발주서 승인
+     * 발주서 승인 (비동기 - 분산 트랜잭션)
      */
     @PostMapping("/{purchaseOrderId}/approve")
-    public ResponseEntity<ApiResponse<Void>> approvePurchaseOrder(
+    public DeferredResult<ResponseEntity<ApiResponse<Void>>> approvePurchaseOrder(
             @PathVariable String purchaseOrderId,
-            @RequestParam String requesterId
-            ) {
-        try {
-            purchaseOrderService.approvePurchaseOrder(purchaseOrderId, requesterId);
-            return ResponseEntity.ok(ApiResponse.success(null, "발주서 승인이 완료되었습니다.", HttpStatus.OK));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.fail("발주서 승인 실패: " + e.getMessage(), HttpStatus.BAD_REQUEST));
-        }
+            @RequestParam String requesterId) {
+
+        return purchaseOrderService.approvePurchaseOrderAsync(purchaseOrderId, requesterId);
     }
 
     /**
@@ -93,6 +88,36 @@ public class PurchaseOrderController {
         } catch (Exception e) {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.fail("발주서 반려 실패: " + e.getMessage(), HttpStatus.BAD_REQUEST));
+        }
+    }
+
+    /**
+     * 배송 시작
+     */
+    @PostMapping("/{purchaseOrderId}/start-delivery")
+    public ResponseEntity<ApiResponse<Void>> startDelivery(
+            @PathVariable String purchaseOrderId) {
+        try {
+            purchaseOrderService.startDelivery(purchaseOrderId);
+            return ResponseEntity.ok(ApiResponse.success(null, "배송이 시작되었습니다.", HttpStatus.OK));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.fail("배송 시작 실패: " + e.getMessage(), HttpStatus.BAD_REQUEST));
+        }
+    }
+
+    /**
+     * 입고 완료
+     */
+    @PostMapping("/{purchaseOrderId}/complete-delivery")
+    public ResponseEntity<ApiResponse<Void>> completeDelivery(
+            @PathVariable String purchaseOrderId) {
+        try {
+            purchaseOrderService.completeDelivery(purchaseOrderId);
+            return ResponseEntity.ok(ApiResponse.success(null, "입고가 완료되었습니다.", HttpStatus.OK));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.fail("입고 완료 실패: " + e.getMessage(), HttpStatus.BAD_REQUEST));
         }
     }
 }

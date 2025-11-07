@@ -146,7 +146,7 @@ public class QuotationController {
     @GetMapping("/available/status/toggle")
     public ApiResponse<List<ToggleCodeLabelDto>> getQuotationAvailableStatusToggle() {
         List<ToggleCodeLabelDto> list = List.of(
-                new ToggleCodeLabelDto("전체 가용재고 상태", "ALL"),
+                new ToggleCodeLabelDto("전체 확인 상태", "ALL"),
                 new ToggleCodeLabelDto("확인", "CHECKED"),
                 new ToggleCodeLabelDto("미확인", "UNCHECKED")
         );
@@ -161,5 +161,25 @@ public class QuotationController {
     public ResponseEntity<ApiResponse<List<ToggleCodeLabelDto>>> getBomList() {
         List<ToggleCodeLabelDto> result = quotationService.getBomList();
         return ResponseEntity.ok(ApiResponse.success(result, "BOM 목록을 조회했습니다.", HttpStatus.OK));
+    }
+
+    @GetMapping("/mrp/quotations/toggle")
+    @io.swagger.v3.oas.annotations.Operation(
+            summary = "MRP 견적 목록 조회",
+            description = "MRP 테이블에 존재하는 견적 목록을 조회합니다. quotationId를 key로, quotationNumber를 value로 반환합니다."
+    )
+    public ResponseEntity<ApiResponse<List<ToggleCodeLabelDto>>> getMrpQuotationList() {
+        List<ToggleCodeLabelDto> result = quotationService.getMrpQuotationList();
+        return ResponseEntity.ok(ApiResponse.success(result, "MRP 견적 목록을 조회했습니다.", HttpStatus.OK));
+    }
+
+    @GetMapping("mrp/available/status/toggle")
+    public ApiResponse<List<ToggleCodeLabelDto>> getMrpAvailableStatusToggle() {
+        List<ToggleCodeLabelDto> list = List.of(
+                new ToggleCodeLabelDto("전체 상태", "ALL"),
+                new ToggleCodeLabelDto("확인", "SUFFICIENT"),
+                new ToggleCodeLabelDto("미확인", "INSUFFICIENT")
+        );
+        return ApiResponse.success(list, "상태 목록 조회 성공", org.springframework.http.HttpStatus.OK);
     }
 }

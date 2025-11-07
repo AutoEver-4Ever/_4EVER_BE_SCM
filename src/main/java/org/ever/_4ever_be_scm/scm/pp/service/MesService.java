@@ -28,12 +28,12 @@ public interface MesService {
     /**
      * 공정 시작
      */
-    void startOperation(String mesId, String operationId, String managerId);
+    void startOperation(String mesId, String logId, String managerId);
 
     /**
      * 공정 완료
      */
-    void completeOperation(String mesId, String operationId);
+    void completeOperation(String mesId, String logId);
 
     /**
      * MES 완료 (비동기 - 분산 트랜잭션)
