@@ -17,12 +17,16 @@ import org.ever._4ever_be_scm.scm.mm.entity.ProductRequest;
 import org.ever._4ever_be_scm.scm.mm.repository.ProductOrderApprovalRepository;
 import org.ever._4ever_be_scm.scm.mm.repository.ProductOrderRepository;
 import org.ever._4ever_be_scm.scm.mm.repository.ProductRequestRepository;
+import org.ever._4ever_be_scm.scm.pp.integration.dto.BusinessQuotationDto;
+import org.ever._4ever_be_scm.scm.pp.integration.dto.BusinessQuotationListResponseDto;
+import org.ever._4ever_be_scm.scm.pp.integration.port.BusinessQuotationServicePort;
 import org.ever._4ever_be_scm.scm.pp.service.DashboardService;
 import org.ever._4ever_be_scm.scm.pp.service.dto.DashboardWorkflowItemDto;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
@@ -46,6 +50,7 @@ public class DashboardServiceImpl implements DashboardService {
     private final ProductRepository productRepository;
     private final ProductOrderApprovalRepository productOrderApprovalRepository;
     private final ProductStockLogRepository productStockLogRepository;
+    private final BusinessQuotationServicePort businessQuotationServicePort;
     private final DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     // 특정 공급사의 발주서 조회
@@ -153,6 +158,19 @@ public class DashboardServiceImpl implements DashboardService {
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<DashboardWorkflowItemDto> getQuotationsToProduction(String userId, int size) {
+        int limit = size > 0 ? size : DEFAULT_SIZE;
+
+        BusinessQuotationListResponseDto response =
+                businessQuotationServicePort.getQuotationList("APPROVAL", LocalDate.now().minusMonths(1), LocalDate.now(), 0, limit);
+
+        return response.getContent().stream()
+                .map(this::toQuotationItem)
+                .toList();
+    }
+
     private DashboardWorkflowItemDto toPurchaseRequestItem(ProductRequest request) {
         return DashboardWorkflowItemDto.builder()
                 .itemId(request.getId())
@@ -199,6 +217,25 @@ public class DashboardServiceImpl implements DashboardService {
                 .name(warehouseName)
                 .statusCode(statusCode)
                 .date(formatDate(stockLog.getCreatedAt()))
+                .build();
+    }
+
+    private DashboardWorkflowItemDto toQuotationItem(BusinessQuotationDto quotation) {
+        String quotationId = quotation.getQuotationId();
+        String quotationNumber = quotation.getQuotationNumber();
+        String customerName = quotation.getCustomerName();
+        String statusCode = quotation.getStatusCode();
+        String dueDate = quotation.getDueDate();
+
+        String itemTitle = customerName + " · 생산 전환 견적";
+
+        return DashboardWorkflowItemDto.builder()
+                .itemId(quotationId)
+                .itemTitle(itemTitle)
+                .itemNumber(quotationNumber)
+                .name(customerName)
+                .statusCode(statusCode != null ? statusCode : DEFAULT_STATUS)
+                .date(dueDate)
                 .build();
     }
 }
