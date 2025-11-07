@@ -119,7 +119,19 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<DashboardWorkflowItemDto> getMmPurchaseOrders(String userId, int size) {
+    public List<DashboardWorkflowItemDto> getPurchaseRequestsOverall(int size) {
+        int limit = size > 0 ? size : DEFAULT_SIZE;
+
+        return productRequestRepository
+                .findAllByOrderByCreatedAtDesc(PageRequest.of(0, limit))
+                .stream()
+                .map(this::toPurchaseRequestItem)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DashboardWorkflowItemDto> getMmPurchaseOrders(int size) {
         int limit = size > 0 ? size : DEFAULT_SIZE;
 
         return productOrderRepository

@@ -47,12 +47,33 @@ public class DashboardController {
 
     @GetMapping("/purchase-orders/mm")
     public ApiResponse<List<DashboardWorkflowItemDto>> getMmPurchaseOrders(
-            @RequestParam("userId") String userId,
             @RequestParam(value = "size", defaultValue = "5") int size
     ) {
         return ApiResponse.success(
-                dashboardService.getMmPurchaseOrders(userId, size),
-                "기업 발주서 목록 조회 성공",
+                dashboardService.getMmPurchaseOrders(size),
+                "발주서 목록 조회 성공",
+                HttpStatus.OK
+        );
+    }
+
+    @GetMapping("/purchase-orders")
+    public ApiResponse<List<DashboardWorkflowItemDto>> getPurchaseOrdersOverall(
+            @RequestParam(value = "size", defaultValue = "5") int size
+    ) {
+        return ApiResponse.success(
+                dashboardService.getMmPurchaseOrders(size),
+                "발주서 목록 조회 성공",
+                HttpStatus.OK
+        );
+    }
+
+    @GetMapping("/purchase-requests/company")
+    public ApiResponse<List<DashboardWorkflowItemDto>> getPurchaseRequestsOverall(
+            @RequestParam(value = "size", defaultValue = "5") int size
+    ) {
+        return ApiResponse.success(
+                dashboardService.getPurchaseRequestsOverall(size),
+                "전체 구매 요청 목록 조회 성공",
                 HttpStatus.OK
         );
     }

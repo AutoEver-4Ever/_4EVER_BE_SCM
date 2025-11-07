@@ -12,4 +12,6 @@ public interface ProductRequestRepository extends JpaRepository<ProductRequest, 
     long countByCreatedAtBetween(LocalDateTime attr0, LocalDateTime attr1);
 
     Page<ProductRequest> findByRequesterIdOrderByCreatedAtDesc(String requesterId, Pageable pageable);
+
+    Page<ProductRequest> findAllByOrderByCreatedAtDesc(Pageable pageable);
 }
