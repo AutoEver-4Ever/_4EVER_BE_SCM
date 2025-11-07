@@ -38,7 +38,7 @@ public class DashboardServiceImpl implements DashboardService {
     private final SupplierCompanyRepository supplierCompanyRepository;
     private final ProductRepository productRepository;
     private final ProductOrderApprovalRepository productOrderApprovalRepository;
-    DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+    private final DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     // 특정 공급사의 발주서 조회
     @Override
@@ -61,7 +61,8 @@ public class DashboardServiceImpl implements DashboardService {
         // product에 supplier_company_id가있음.
         // 공급사 ID
         String supplierCompanyId = supplierCompany.getId();
-        Product productName = productRepository.getProductNameBySupplierCompanyId(supplierCompanyId);
+        Product product = productRepository.getProductNameBySupplierCompanyId(supplierCompanyId);
+        String productTitle = product != null ? product.getProductName() : supplierCompanyName;
 
         // 발주서 테이블(product_order)의 공급사 이름으로 조회하여 공급사에게 할당된 발주서 목록 조회
         List<ProductOrder> orders = productOrderRepository
@@ -74,7 +75,7 @@ public class DashboardServiceImpl implements DashboardService {
         return orders.stream()
                 .map(order -> DashboardWorkflowItemDto.builder()
                         .itemId(order.getId())
-                        .itemTitle(productName + " 발주")
+                        .itemTitle(productTitle + " 발주")
                         .itemNumber(order.getProductOrderCode())
                         .name(supplierCompanyName)
                         .statusCode(Optional.ofNullable(order.getApprovalId())
@@ -86,10 +87,62 @@ public class DashboardServiceImpl implements DashboardService {
                 .toList();
     }
 
+
     @Override
+    @Transactional(readOnly = true)
     public List<DashboardWorkflowItemDto> getPurchaseRequests(String userId, int size) {
-        return List.of();
+        int limit = size > 0 ? size : DEFAULT_SIZE;
+
+        return productRequestRepository
+                .findByRequesterIdOrderByCreatedAtDesc(userId, PageRequest.of(0, limit))
+                .stream()
+                .map(this::toPurchaseRequestItem)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DashboardWorkflowItemDto> getMmPurchaseOrders(String userId, int size) {
+        int limit = size > 0 ? size : DEFAULT_SIZE;
+
+        return productOrderRepository
+                .findAllByOrderByCreatedAtDesc(PageRequest.of(0, limit))
+                .stream()
+                .map(order -> DashboardWorkflowItemDto.builder()
+                        .itemId(order.getId())
+                        .itemTitle(order.getSupplierCompanyName())
+                        .itemNumber(order.getProductOrderCode())
+                        .name(order.getRequesterId())
+                        .statusCode(resolveOrderStatus(order))
+                        .date(formatDate(order.getCreatedAt()))
+                        .build())
+                .toList();
+    }
+
+    private DashboardWorkflowItemDto toPurchaseRequestItem(ProductRequest request) {
+        return DashboardWorkflowItemDto.builder()
+                .itemId(request.getId())
+                .itemTitle(request.getProductRequestType())
+                .itemNumber(request.getProductRequestCode())
+                .name(request.getRequesterId())
+                .statusCode(resolveRequestStatus(request))
+                .date(formatDate(request.getCreatedAt()))
+                .build();
+    }
+
+    private String resolveOrderStatus(ProductOrder order) {
+        return Optional.ofNullable(order.getApprovalId())
+                .map(approval -> Optional.ofNullable(approval.getApprovalStatus()).orElse(DEFAULT_STATUS))
+                .orElse(DEFAULT_STATUS);
+    }
+
+    private String resolveRequestStatus(ProductRequest request) {
+        return Optional.ofNullable(request.getApprovalId())
+                .map(approval -> Optional.ofNullable(approval.getApprovalStatus()).orElse(DEFAULT_STATUS))
+                .orElse(DEFAULT_STATUS);
+    }
+
+    private String formatDate(java.time.LocalDateTime datetime) {
+        return datetime != null ? datetime.format(ISO_FORMATTER) : null;
     }
 }
-
-

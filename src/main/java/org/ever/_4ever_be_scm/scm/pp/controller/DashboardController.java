@@ -44,4 +44,16 @@ public class DashboardController {
                 HttpStatus.OK
         );
     }
+
+    @GetMapping("/purchase-orders/mm")
+    public ApiResponse<List<DashboardWorkflowItemDto>> getMmPurchaseOrders(
+            @RequestParam("userId") String userId,
+            @RequestParam(value = "size", defaultValue = "5") int size
+    ) {
+        return ApiResponse.success(
+                dashboardService.getMmPurchaseOrders(userId, size),
+                "기업 발주서 목록 조회 성공",
+                HttpStatus.OK
+        );
+    }
 }

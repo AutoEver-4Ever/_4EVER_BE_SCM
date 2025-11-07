@@ -47,4 +47,6 @@ public interface ProductOrderRepository extends JpaRepository<ProductOrder, Stri
     long countByApprovalId_ApprovalStatus(String approvalStatus);
 
     Page<ProductOrder> findBySupplierCompanyNameOrderByCreatedAtDesc(String supplierCompanyName, Pageable pageable);
+
+    Page<ProductOrder> findAllByOrderByCreatedAtDesc(Pageable pageable);
 }

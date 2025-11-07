@@ -7,4 +7,5 @@ import java.util.List;
 public interface DashboardService {
     List<DashboardWorkflowItemDto> getSupplierPurchaseOrders(String userId, int size);
     List<DashboardWorkflowItemDto> getPurchaseRequests(String userId, int size);
+    List<DashboardWorkflowItemDto> getMmPurchaseOrders(String userId, int size);
 }
