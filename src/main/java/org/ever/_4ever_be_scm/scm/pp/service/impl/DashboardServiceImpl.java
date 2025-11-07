@@ -8,6 +8,7 @@ import org.ever._4ever_be_scm.scm.iv.entity.ProductStockLog;
 import org.ever._4ever_be_scm.scm.iv.entity.SupplierCompany;
 import org.ever._4ever_be_scm.scm.iv.entity.SupplierUser;
 import org.ever._4ever_be_scm.scm.iv.entity.Warehouse;
+import org.ever._4ever_be_scm.scm.iv.repository.ProductRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductStockLogRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.SupplierCompanyRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.SupplierUserRepository;
@@ -77,7 +78,7 @@ public class DashboardServiceImpl implements DashboardService {
         // product에 supplier_company_id가있음.
         // 공급사 ID
         String supplierCompanyId = supplierCompany.getId();
-        Product product = productRepository.getProductNameBySupplierCompanyId(supplierCompanyId);
+        Product product = productRepository.findFirstBySupplierCompany_Id(supplierCompanyId);
         String productTitle = product != null ? product.getProductName() : supplierCompanyName;
 
         // 발주서 테이블(product_order)의 공급사 이름으로 조회하여 공급사에게 할당된 발주서 목록 조회
