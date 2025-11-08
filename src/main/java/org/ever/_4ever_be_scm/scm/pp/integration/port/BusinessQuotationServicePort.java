@@ -18,7 +18,8 @@ public interface BusinessQuotationServicePort {
      * @return 견적 목록
      */
     BusinessQuotationListResponseDto getQuotationList(
-            String statusCode, 
+            String statusCode,
+            String availableStatus,
             LocalDate startDate, 
             LocalDate endDate, 
             int page, 

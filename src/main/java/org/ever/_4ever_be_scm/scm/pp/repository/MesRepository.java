@@ -24,4 +24,6 @@ public interface MesRepository extends JpaRepository<Mes, String> {
             @Param("status") String status,
             Pageable pageable
     );
+
+    List<Mes> findByStatusOrderByCreatedAtDesc(String status);
 }

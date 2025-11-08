@@ -38,27 +38,6 @@ public class MesCompleteCompletionListener {
 
         try {
             if (event.isSuccess()) {
-                // 1. MES 조회
-                Mes mes = mesRepository.findById(event.getMesId()).orElse(null);
-                if (mes != null) {
-                    // 2. ProductStock의 forShipmentCount 증가
-                    ProductStock productStock = productStockRepository.findByProductId(mes.getProductId())
-                            .orElse(null);
-
-                    if (productStock != null) {
-                        BigDecimal currentForShipmentCount = productStock.getForShipmentCount() != null ?
-                                productStock.getForShipmentCount() : BigDecimal.ZERO;
-                        BigDecimal newForShipmentCount = currentForShipmentCount.add(BigDecimal.valueOf(mes.getQuantity()));
-                        productStock.setForShipmentCount(newForShipmentCount);
-                        productStockRepository.save(productStock);
-
-                        log.info("ProductStock forShipmentCount 증가: productId={}, 기존={}, 신규={}, 증가량={}",
-                                mes.getProductId(), currentForShipmentCount, newForShipmentCount, mes.getQuantity());
-                    } else {
-                        log.warn("ProductStock을 찾을 수 없습니다: productId={}", mes.getProductId());
-                    }
-                }
-
                 // 3. 성공 결과 설정
                 asyncResultManager.setSuccessResult(
                         event.getTransactionId(),

@@ -37,6 +37,7 @@ public class QuotationController {
     public ResponseEntity<ApiResponse<QuotationGroupListResponseDto>> getQuotationList(
             @io.swagger.v3.oas.annotations.Parameter(description = "상태코드 (ALL, REVIEW, APPROVAL)")
             @RequestParam(defaultValue = "ALL") String statusCode,
+            @RequestParam(required = false) String availableStatus,
             @io.swagger.v3.oas.annotations.Parameter(description = "시작 날짜 (yyyy-MM-dd)")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @io.swagger.v3.oas.annotations.Parameter(description = "종료 날짜 (yyyy-MM-dd)")
@@ -47,7 +48,7 @@ public class QuotationController {
             @RequestParam(defaultValue = "10") int size) {
         
         QuotationGroupListResponseDto result = quotationService.getQuotationList(
-                statusCode, startDate, endDate, page, size);
+                statusCode, availableStatus, startDate, endDate, page, size);
         
         return ResponseEntity.ok(ApiResponse.success(result, "견적 목록을 조회했습니다.", HttpStatus.OK));
     }
@@ -114,7 +115,7 @@ public class QuotationController {
             summary = "MRP 조회",
             description = "자재 소요 계획(MRP)을 조회합니다. 원자재별로 그룹핑되어 필요량이 합산되며, bomId 또는 quotationId로 필터링할 수 있습니다."
     )
-    public ResponseEntity<ApiResponse<MrpQueryResponseDto>> getMrp(
+    public ResponseEntity<ApiResponse<PagedResponseDto<MrpQueryResponseDto.MrpItemDto>>> getMrp(
             @io.swagger.v3.oas.annotations.Parameter(description = "BOM ID (선택)")
             @RequestParam(required = false) String bomId,
             @io.swagger.v3.oas.annotations.Parameter(description = "견적 ID (선택)")
@@ -126,9 +127,10 @@ public class QuotationController {
             @io.swagger.v3.oas.annotations.Parameter(description = "페이지 크기")
             @RequestParam(defaultValue = "10") int size) {
 
-        MrpQueryResponseDto mrpData = quotationService.getMrp(bomId, quotationId, availableStatusCode, page, size);
+        Page<MrpQueryResponseDto.MrpItemDto> mrpData = quotationService.getMrp(bomId, quotationId, availableStatusCode, page, size);
+        PagedResponseDto<MrpQueryResponseDto.MrpItemDto> response = PagedResponseDto.from(mrpData);
 
-        return ResponseEntity.ok(ApiResponse.success(mrpData, "자재 조달 계획을 조회했습니다.", HttpStatus.OK));
+        return ResponseEntity.ok(ApiResponse.success(response, "자재 조달 계획을 조회했습니다.", HttpStatus.OK));
     }
 
     @GetMapping("/status/toggle")
@@ -136,8 +138,7 @@ public class QuotationController {
         List<ToggleCodeLabelDto> list = List.of(
                 new ToggleCodeLabelDto("전체 상태", "ALL"),
                 new ToggleCodeLabelDto("승인", "APPROVAL"),
-                new ToggleCodeLabelDto("검토중", "REVIEW"),
-                new ToggleCodeLabelDto("반려", "REJECTED")
+                new ToggleCodeLabelDto("검토중", "REVIEW")
         );
         return ApiResponse.success(list, "상태 목록 조회 성공", org.springframework.http.HttpStatus.OK);
     }
@@ -145,9 +146,39 @@ public class QuotationController {
     @GetMapping("/available/status/toggle")
     public ApiResponse<List<ToggleCodeLabelDto>> getQuotationAvailableStatusToggle() {
         List<ToggleCodeLabelDto> list = List.of(
-                new ToggleCodeLabelDto("전체 상태", "ALL"),
+                new ToggleCodeLabelDto("전체 확인 상태", "ALL"),
                 new ToggleCodeLabelDto("확인", "CHECKED"),
                 new ToggleCodeLabelDto("미확인", "UNCHECKED")
+        );
+        return ApiResponse.success(list, "상태 목록 조회 성공", org.springframework.http.HttpStatus.OK);
+    }
+
+    @GetMapping("/boms/toggle")
+    @io.swagger.v3.oas.annotations.Operation(
+            summary = "BOM 목록 조회",
+            description = "BOM 목록을 조회합니다. bomId를 key로, productName을 value로 반환합니다."
+    )
+    public ResponseEntity<ApiResponse<List<ToggleCodeLabelDto>>> getBomList() {
+        List<ToggleCodeLabelDto> result = quotationService.getBomList();
+        return ResponseEntity.ok(ApiResponse.success(result, "BOM 목록을 조회했습니다.", HttpStatus.OK));
+    }
+
+    @GetMapping("/mrp/quotations/toggle")
+    @io.swagger.v3.oas.annotations.Operation(
+            summary = "MRP 견적 목록 조회",
+            description = "MRP 테이블에 존재하는 견적 목록을 조회합니다. quotationId를 key로, quotationNumber를 value로 반환합니다."
+    )
+    public ResponseEntity<ApiResponse<List<ToggleCodeLabelDto>>> getMrpQuotationList() {
+        List<ToggleCodeLabelDto> result = quotationService.getMrpQuotationList();
+        return ResponseEntity.ok(ApiResponse.success(result, "MRP 견적 목록을 조회했습니다.", HttpStatus.OK));
+    }
+
+    @GetMapping("mrp/available/status/toggle")
+    public ApiResponse<List<ToggleCodeLabelDto>> getMrpAvailableStatusToggle() {
+        List<ToggleCodeLabelDto> list = List.of(
+                new ToggleCodeLabelDto("전체 상태", "ALL"),
+                new ToggleCodeLabelDto("확인", "SUFFICIENT"),
+                new ToggleCodeLabelDto("미확인", "INSUFFICIENT")
         );
         return ApiResponse.success(list, "상태 목록 조회 성공", org.springframework.http.HttpStatus.OK);
     }

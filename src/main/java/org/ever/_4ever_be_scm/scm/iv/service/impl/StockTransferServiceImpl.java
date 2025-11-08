@@ -182,7 +182,7 @@ public class StockTransferServiceImpl implements StockTransferService {
                 .currentCount(newTotalCount)
                 .fromWarehouse(fromWarehouse)
                 .toWarehouse(toWarehouse)
-                .createdById("delivery-manager-001") // 임의의 담당자 ID
+                .createdById("system") // 임의의 담당자 ID
                 .referenceCode(request.getReferenceCode())
                 .note(request.getReason())
                 .build();

@@ -8,6 +8,7 @@ import org.ever._4ever_be_scm.scm.iv.entity.ProductStock;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductStockRepository;
 import org.ever._4ever_be_scm.scm.iv.service.StockReservationService;
+import org.ever._4ever_be_scm.scm.mm.dto.ToggleCodeLabelDto;
 import org.ever._4ever_be_scm.scm.pp.dto.*;
 import org.ever._4ever_be_scm.scm.pp.entity.*;
 import org.ever._4ever_be_scm.scm.pp.integration.dto.BusinessQuotationDto;
@@ -46,6 +47,7 @@ public class QuotationServiceImpl implements QuotationService {
     private final MpsRepository mpsRepository;
     private final MpsDetailRepository mpsDetailRepository;
     private final MrpRepository mrpRepository;
+    private final MrpRunRepository mrpRunRepository;
     private final MesRepository mesRepository;
     private final MesOperationLogRepository mesOperationLogRepository;
     private final RoutingRepository routingRepository;
@@ -58,7 +60,8 @@ public class QuotationServiceImpl implements QuotationService {
     @Override
     @Transactional(readOnly = true)
     public QuotationGroupListResponseDto getQuotationList(
-            String statusCode, 
+            String statusCode,
+            String availableStatus,
             LocalDate startDate, 
             LocalDate endDate, 
             int page, 
@@ -66,7 +69,7 @@ public class QuotationServiceImpl implements QuotationService {
         
         // Business 서비스에서 견적 목록 조회 (이미 그룹핑된 형태)
         BusinessQuotationListResponseDto businessResponse = businessQuotationServicePort
-                .getQuotationList(statusCode, startDate, endDate, page, size);
+                .getQuotationList(statusCode,availableStatus, startDate, endDate, page, size);
         
         // Business 견적 데이터를 QuotationGroupDto로 변환
         List<QuotationGroupListResponseDto.QuotationGroupDto> quotationGroups = businessResponse.getContent().stream()
@@ -75,11 +78,11 @@ public class QuotationServiceImpl implements QuotationService {
         
         // PageInfo 변환
         QuotationGroupListResponseDto.PageInfo pageInfo = QuotationGroupListResponseDto.PageInfo.builder()
-                .number(businessResponse.getPageInfo().getNumber())
-                .size(businessResponse.getPageInfo().getSize())
-                .totalElements(businessResponse.getPageInfo().getTotalElements())
-                .totalPages(businessResponse.getPageInfo().getTotalPages())
-                .hasNext(businessResponse.getPageInfo().isHasNext())
+                .number(businessResponse.getPage().getNumber())
+                .size(businessResponse.getPage().getSize())
+                .totalElements(businessResponse.getPage().getTotalElements())
+                .totalPages(businessResponse.getPage().getTotalPages())
+                .hasNext(businessResponse.getPage().isHasNext())
                 .build();
         
         return QuotationGroupListResponseDto.builder()
@@ -101,7 +104,7 @@ public class QuotationServiceImpl implements QuotationService {
                 .quotationId(businessQuotation.getQuotationId())
                 .quotationNumber(businessQuotation.getQuotationNumber())
                 .customerName(businessQuotation.getCustomerName())
-                .requestDate(businessQuotation.getQuotationDate() != null ? 
+                .requestDate(businessQuotation.getQuotationDate() != null ?
                             businessQuotation.getQuotationDate() : businessQuotation.getRequestDate())
                 .dueDate(businessQuotation.getDueDate())
                 .statusCode(businessQuotation.getStatusCode())
@@ -179,7 +182,7 @@ public class QuotationServiceImpl implements QuotationService {
         
         String productId = item.getItemId();
         Integer requestQuantity = item.getQuantity();
-        LocalDate requestDueDate = LocalDate.parse(businessQuotation.getDueDate());
+        LocalDate requestDueDate = LocalDate.now();  // 요청 납기일이 null이므로 오늘 날짜 사용
         LocalDateTime now = LocalDateTime.now();
         
         log.info("아이템 시뮬레이션: productId={}, 요청수량={}", productId, requestQuantity);
@@ -228,20 +231,20 @@ public class QuotationServiceImpl implements QuotationService {
                 maxDeliveryDays = Math.max(maxDeliveryDays, bom.getLeadTime().intValue());
             }
         }
-        
+
+        //shortages에서 itemId가 같은 항목들을 합산
+        shortages = mergeShortagesByItemId(shortages);
+
         // 4. 최종 가용량 계산 (요구사항: 완제품 재고만 가용량으로 계산)
         Integer totalAvailableQuantity = availableFromStock;
         Integer finalShortageQuantity = shortageQuantity; // 부족분은 그대로
-        
-        // 5. 제안 납기 계산
-        LocalDate suggestedDueDate = requestDueDate;
-        if (hasShortage) {
-            suggestedDueDate = requestDueDate.plusDays(maxDeliveryDays);
-        }
-        
-        log.info("시뮬레이션 결과 - 요청:{}개, 재고가용:{}개, 부족:{}개", 
+
+        // 5. 제안 납기 계산 (오늘 날짜 + 필요 일수)
+        LocalDate suggestedDueDate = LocalDate.now().plusDays(maxDeliveryDays+4);
+
+        log.info("시뮬레이션 결과 - 요청:{}개, 재고가용:{}개, 부족:{}개",
                 requestQuantity, totalAvailableQuantity, finalShortageQuantity);
-        
+
         return QuotationSimulateResponseDto.builder()
             .quotationId(quotationId)
             .quotationNumber(businessQuotation.getQuotationNumber())
@@ -289,33 +292,52 @@ public class QuotationServiceImpl implements QuotationService {
         }
         
         processedProducts.add(bomItem.getComponentId());
-        
+
         try {
-            Product componentProduct = productRepository.findById(bomItem.getComponentId()).orElse(null);
+            // componentType에 따라 Product 조회 방법이 다름
+            Product componentProduct = null;
+            String productIdForStock = bomItem.getComponentId(); // 재고 조회용 productId
+
+            if ("ITEM".equals(bomItem.getComponentType())) {
+                // ITEM의 경우 componentId는 bomId이므로 BOM에서 productId를 찾아야 함
+                Optional<Bom> bomOpt = bomRepository.findById(bomItem.getComponentId());
+                if (bomOpt.isPresent()) {
+                    productIdForStock = bomOpt.get().getProductId();
+                    componentProduct = productRepository.findById(productIdForStock).orElse(null);
+                }
+            } else {
+                // MATERIAL의 경우 componentId가 바로 productId
+                componentProduct = productRepository.findById(bomItem.getComponentId()).orElse(null);
+            }
+
             if (componentProduct == null) {
-                log.warn("구성품목을 찾을 수 없습니다: componentId={}", bomItem.getComponentId());
+                log.warn("구성품목을 찾을 수 없습니다: componentId={}, componentType={}",
+                    bomItem.getComponentId(), bomItem.getComponentType());
                 return requirement;
             }
-            
+
             Integer totalRequired = bomItem.getCount().multiply(BigDecimal.valueOf(requiredQuantity)).intValue();
-            
+
             if ("MATERIAL".equals(componentProduct.getCategory())) {
                 // 원자재인 경우 - 직접 재고 확인
-                Integer currentStock = getActualAvailableStock(bomItem.getComponentId());
-                
-                if (currentStock < totalRequired) {
-                    Integer shortQuantity = totalRequired - currentStock;
-                    requirement.addShortage(QuotationSimulateResponseDto.ShortageDto.builder()
-                        .itemId(bomItem.getComponentId())
-                        .itemName(componentProduct.getProductName())
-                        .requiredQuantity(totalRequired)
-                        .currentStock(currentStock)
-                        .shortQuantity(shortQuantity)
-                        .build());
-                }
-                
+                Integer currentStock = getActualAvailableStock(productIdForStock);
+                Integer shortQuantity = Math.max(0, totalRequired - currentStock);
+
+                // 충족 여부 상관없이 원자재 정보를 항상 shortages 배열에 추가 (충족이면 shortQuantity=0)
+                requirement.addShortage(QuotationSimulateResponseDto.ShortageDto.builder()
+                    .itemId(bomItem.getComponentId())
+                    .itemName(componentProduct.getProductName())
+                    .requiredQuantity(totalRequired)
+                    .currentStock(currentStock)
+                    .shortQuantity(shortQuantity)
+                    .build());
+
+                log.debug("원자재 추가: itemId={}, name={}, 필요={}, 재고={}, 부족={}",
+                    bomItem.getComponentId(), componentProduct.getProductName(),
+                    totalRequired, currentStock, shortQuantity);
+
                 // 이 원자재로 생산 가능한 수량 계산
-                Integer maxProduction = bomItem.getCount().intValue() > 0 ? 
+                Integer maxProduction = bomItem.getCount().intValue() > 0 ?
                                        currentStock / bomItem.getCount().intValue() : Integer.MAX_VALUE;
                 requirement.updateMaxProductionCapacity(maxProduction);
                 
@@ -329,19 +351,29 @@ public class QuotationServiceImpl implements QuotationService {
                 
             } else if ("ITEM".equals(componentProduct.getCategory())) {
                 // 중간제품인 경우 - 재귀적으로 하위 BOM 확인
-                Integer componentStock = getActualAvailableStock(bomItem.getComponentId());
+                Integer componentStock = getActualAvailableStock(productIdForStock);
                 Integer componentShortage = Math.max(0, totalRequired - componentStock);
-                
+
+                log.info("중간제품 처리: productId={}, name={}, totalRequired={}, stock={}, shortage={}",
+                    productIdForStock, componentProduct.getProductName(), totalRequired, componentStock, componentShortage);
+
                 if (componentShortage > 0) {
-                    // 하위 BOM이 있는지 확인
-                    Optional<Bom> subBomOpt = bomRepository.findByProductId(bomItem.getComponentId());
+                    // 하위 BOM이 있는지 확인 (ITEM의 경우 componentId가 bomId)
+                    Optional<Bom> subBomOpt = bomRepository.findById(bomItem.getComponentId());
+                    log.info("하위 BOM 조회: bomId={}, BOM존재={}", bomItem.getComponentId(), subBomOpt.isPresent());
+
                     if (subBomOpt.isPresent()) {
                         List<BomItem> subBomItems = bomItemRepository.findByBomId(subBomOpt.get().getId());
-                        
+                        log.info("하위 BOM 구성품 수: bomId={}, itemCount={}", subBomOpt.get().getId(), subBomItems.size());
+
                         for (BomItem subBomItem : subBomItems) {
+                            log.info("하위 구성품 처리 시작: componentId={}", subBomItem.getComponentId());
                             ProductionRequirement subRequirement = calculateProductionRequirement(
                                 subBomItem, componentShortage, new HashSet<>(processedProducts));
-                            
+
+                            log.info("하위 구성품 처리 완료: componentId={}, shortages={}",
+                                subBomItem.getComponentId(), subRequirement.getShortages().size());
+
                             requirement.getShortages().addAll(subRequirement.getShortages());
                             if (subRequirement.hasShortage()) {
                                 requirement.hasShortage = true;
@@ -349,12 +381,13 @@ public class QuotationServiceImpl implements QuotationService {
                             requirement.updateMaxProductionCapacity(subRequirement.getMaxProductionCapacity());
                             requirement.updateMaxDeliveryDays(subRequirement.getMaxDeliveryDays());
                         }
-                        
+
                         // 하위 BOM의 리드타임 고려
                         if (subBomOpt.get().getLeadTime() != null) {
                             requirement.updateMaxDeliveryDays(subBomOpt.get().getLeadTime().intValue());
                         }
                     } else {
+                        log.warn("하위 BOM이 없는 중간제품: productId={}", bomItem.getComponentId());
                         // 하위 BOM이 없는 중간제품인 경우 부족분을 직접 계산
                         requirement.addShortage(QuotationSimulateResponseDto.ShortageDto.builder()
                             .itemId(bomItem.getComponentId())
@@ -364,6 +397,9 @@ public class QuotationServiceImpl implements QuotationService {
                             .shortQuantity(componentShortage)
                             .build());
                     }
+                } else {
+                    log.info("중간제품 재고 충분 - 하위 BOM 체크 스킵: productId={}, name={}",
+                        bomItem.getComponentId(), componentProduct.getProductName());
                 }
                 
                 // 중간제품의 총 가용량 계산 (재고 + 생산가능량)
@@ -429,9 +465,9 @@ public class QuotationServiceImpl implements QuotationService {
         
         String productId = item.getItemId();
         Integer requestQuantity = item.getQuantity();
-        LocalDate requestDueDate = LocalDate.parse(businessQuotation.getDueDate());
-        
-        log.info("MPS 프리뷰 생성: productId={}, 요청수량={}, 납기={}", 
+        LocalDate requestDueDate = LocalDate.now();  // 요청 납기일이 null이므로 오늘 날짜 사용
+
+        log.info("MPS 프리뷰 생성: productId={}, 요청수량={}, 납기={}",
                 productId, requestQuantity, requestDueDate);
         
         // BOM 조회하여 리드타임 확인
@@ -453,11 +489,14 @@ public class QuotationServiceImpl implements QuotationService {
         List<MpsPreviewResponseDto.WeekDto> weeks = calculateWeeklyMps(
             shortageQuantity, requestDueDate, leadTimeDays);
         
+        // 확정 납기 계산: 오늘 + 리드타임 + 배송 4일
+        LocalDate confirmedDueDate = LocalDate.now().plusDays(leadTimeDays).plusDays(4);
+
         return MpsPreviewResponseDto.builder()
             .quotationNumber(businessQuotation.getQuotationNumber())
             .customerCompanyName(businessQuotation.getCustomerName())
             .productName(product.getProductName())
-            .confirmedDueDate(requestDueDate)
+            .confirmedDueDate(confirmedDueDate)
             .weeks(weeks)
             .build();
     }
@@ -744,7 +783,7 @@ public class QuotationServiceImpl implements QuotationService {
 
         // 7. MES 생성 (생산이 필요한 경우 작업 지시서 생성)
         if (shortageQuantity > 0) {
-            createMesRecords(quotationId, productId, shortageQuantity, today, productionCompleteDate, bom);
+            createMesRecords(quotationId, productId, shortageQuantity, null, productionCompleteDate, bom);
         }
 
         log.info("아이템 확정 완료: productId={}, 재고예약={}개, 생산계획={}개, 최종납기={}",
@@ -856,28 +895,43 @@ public class QuotationServiceImpl implements QuotationService {
             return;
         }
         processedProducts.add(bomItem.getComponentId());
-        
+
         try {
-            Product component = productRepository.findById(bomItem.getComponentId()).orElse(null);
+            // componentType에 따라 Product 조회 방법이 다름
+            Product component = null;
+            String productIdForStock = bomItem.getComponentId(); // 재고 조회용 productId
+
+            if ("ITEM".equals(bomItem.getComponentType())) {
+                // ITEM의 경우 componentId는 bomId이므로 BOM에서 productId를 찾아야 함
+                Optional<Bom> bomOpt = bomRepository.findById(bomItem.getComponentId());
+                if (bomOpt.isPresent()) {
+                    productIdForStock = bomOpt.get().getProductId();
+                    component = productRepository.findById(productIdForStock).orElse(null);
+                }
+            } else {
+                // MATERIAL의 경우 componentId가 바로 productId
+                component = productRepository.findById(bomItem.getComponentId()).orElse(null);
+            }
+
             if (component == null) return;
-            
+
             Integer requiredQuantity = bomItem.getCount().multiply(BigDecimal.valueOf(parentQuantity)).intValue();
-            Integer currentStock = getActualAvailableStock(bomItem.getComponentId());
+            Integer currentStock = getActualAvailableStock(productIdForStock);
             Integer shortageQuantity = Math.max(0, requiredQuantity - currentStock);
             Integer availableFromStock = Math.min(requiredQuantity, currentStock);
 
             // 원자재 재고 예약 (재고에서 충당 가능한 만큼)
             if (availableFromStock > 0) {
                 boolean reserved = stockReservationService.reserveStock(
-                    bomItem.getComponentId(),
+                    productIdForStock,
                     BigDecimal.valueOf(availableFromStock)
                 );
                 if (!reserved) {
                     log.warn("원자재 재고 예약 실패: productId={}, quantity={}",
-                        bomItem.getComponentId(), availableFromStock);
+                        productIdForStock, availableFromStock);
                 } else {
                     log.info("원자재 재고 예약 완료: productId={}, quantity={}",
-                        bomItem.getComponentId(), availableFromStock);
+                        productIdForStock, availableFromStock);
                 }
             }
 
@@ -897,8 +951,10 @@ public class QuotationServiceImpl implements QuotationService {
                 .id(UUID.randomUUID().toString())
                 .bomId(parentBom.getId())
                 .quotationId(quotationId)
-                .productId(bomItem.getComponentId())
+                .productId(productIdForStock)
                 .requiredCount(BigDecimal.valueOf(requiredQuantity))
+                .shortageQuantity(BigDecimal.valueOf(shortageQuantity))  // 부족량 추가
+                .consumedCount(BigDecimal.ZERO)                          // 소비량 초기화
                 .procurementStart(procurementStartDate)
                 .expectedArrival(expectedArrivalDate)
                 .status(shortageQuantity > 0 ? "INSUFFICIENT" : "SUFFICIENT")
@@ -906,21 +962,32 @@ public class QuotationServiceImpl implements QuotationService {
 
             mrpRepository.save(mrp);
 
-            log.info("MRP 생성: productId={}, 필요량={}, 현재재고={}, 재고예약={}, 부족량={}",
-                     bomItem.getComponentId(), requiredQuantity, currentStock, availableFromStock, shortageQuantity);
-            
-            // 중간제품인 경우 하위 BOM 처리
+            log.info("MRP 생성: productId={}, name={}, category={}, 필요량={}, 현재재고={}, 재고예약={}, 부족량={}, 소비량=0",
+                     productIdForStock, component.getProductName(), component.getCategory(),
+                     requiredQuantity, currentStock, availableFromStock, shortageQuantity);
+
+            // 중간제품인 경우 하위 BOM 처리 (ITEM의 경우 componentId가 bomId)
             if ("ITEM".equals(component.getCategory()) && shortageQuantity > 0) {
-                Optional<Bom> subBomOpt = bomRepository.findByProductId(bomItem.getComponentId());
+                log.info("중간제품 하위 BOM 처리 시작: bomId={}, shortage={}", bomItem.getComponentId(), shortageQuantity);
+                Optional<Bom> subBomOpt = bomRepository.findById(bomItem.getComponentId());
+                log.info("하위 BOM 조회 결과: bomId={}, BOM존재={}", bomItem.getComponentId(), subBomOpt.isPresent());
+
                 if (subBomOpt.isPresent()) {
                     List<BomItem> subBomItems = bomItemRepository.findByBomId(subBomOpt.get().getId());
-                    
+                    log.info("하위 BOM 구성품 수: bomId={}, itemCount={}", subBomOpt.get().getId(), subBomItems.size());
+
                     for (BomItem subBomItem : subBomItems) {
-                        createMrpForComponent(null, subBomItem, shortageQuantity, 
-                                            expectedArrivalDate, new HashSet<>(processedProducts), 
+                        log.info("하위 구성품 MRP 생성 시작: componentId={}", subBomItem.getComponentId());
+                        createMrpForComponent(null, subBomItem, shortageQuantity,
+                                            expectedArrivalDate, new HashSet<>(processedProducts),
                                             subBomOpt.get(), quotationId);
                     }
+                } else {
+                    log.warn("하위 BOM이 없는 중간제품: productId={}", bomItem.getComponentId());
                 }
+            } else if ("ITEM".equals(component.getCategory()) && shortageQuantity == 0) {
+                log.info("중간제품 재고 충분 - 하위 MRP 생성 스킵: productId={}, name={}",
+                    bomItem.getComponentId(), component.getProductName());
             }
             
         } finally {
@@ -1008,16 +1075,26 @@ public class QuotationServiceImpl implements QuotationService {
 
         log.info("MPS 조회 완료: 총 {}주차, 페이지 {}/{}", allWeeks.size(), page + 1, (allWeeks.size() + size - 1) / size);
 
+        // 6. PageInfo 생성
+        MpsQueryResponseDto.PageInfo pageInfo = MpsQueryResponseDto.PageInfo.builder()
+                .number(page)
+                .size(size)
+                .totalElements(allWeeks.size())
+                .totalPages((allWeeks.size() + size - 1) / size)
+                .hasNext(end < allWeeks.size())
+                .build();
+
         return MpsQueryResponseDto.builder()
                 .bomId(bomId)
                 .productName(productName)
-                .weeks(pagedWeeks)
+                .content(pagedWeeks)
+                .page(pageInfo)
                 .build();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public MrpQueryResponseDto getMrp(String bomId, String quotationId, String availableStatusCode, int page, int size) {
+    public Page<MrpQueryResponseDto.MrpItemDto> getMrp(String bomId, String quotationId, String availableStatusCode, int page, int size) {
         log.info("MRP 조회: bomId={}, quotationId={}, statusCode={}, page={}, size={}",
                 bomId, quotationId, availableStatusCode, page, size);
 
@@ -1034,16 +1111,30 @@ public class QuotationServiceImpl implements QuotationService {
 
         log.info("조회된 MRP 레코드 수: {}", mrpList.size());
 
-        // 2. productId별로 그룹핑 및 집계
+        // 2. quotationId + productId 조합으로 그룹핑 및 집계
         Map<String, MrpAggregation> aggregationMap = new LinkedHashMap<>();
 
         for (Mrp mrp : mrpList) {
+            String quotationIdKey = mrp.getQuotationId();
             String productId = mrp.getProductId();
 
-            MrpAggregation aggregation = aggregationMap.computeIfAbsent(productId, k -> new MrpAggregation(productId));
+            // quotationId + productId 조합 키
+            String compositeKey = quotationIdKey + ":" + productId;
 
-            // 필요량 합산
+            MrpAggregation aggregation = aggregationMap.computeIfAbsent(
+                compositeKey,
+                k -> new MrpAggregation(quotationIdKey, productId)
+            );
+
+            // 필요량, 부족량, 소비량 합산
             aggregation.addRequiredQuantity(mrp.getRequiredCount());
+            aggregation.addShortageQuantity(mrp.getShortageQuantity());
+            aggregation.addConsumedCount(mrp.getConsumedCount());
+
+            // 하나라도 INSUFFICIENT면 전체 INSUFFICIENT
+            if ("INSUFFICIENT".equals(mrp.getStatus())) {
+                aggregation.status = "INSUFFICIENT";
+            }
 
             // 가장 빠른 조달 시작일/도착일 사용
             if (mrp.getProcurementStart() != null) {
@@ -1059,7 +1150,7 @@ public class QuotationServiceImpl implements QuotationService {
             }
         }
 
-        // 3. 각 원자재에 대해 재고 정보 조회 및 DTO 생성
+        // 3. 각 원자재에 대해 DTO 생성 (MRP 테이블 데이터만 사용)
         List<MrpQueryResponseDto.MrpItemDto> allItems = new ArrayList<>();
 
         for (MrpAggregation aggregation : aggregationMap.values()) {
@@ -1074,31 +1165,18 @@ public class QuotationServiceImpl implements QuotationService {
                 continue;
             }
 
-            // 재고 정보 조회
-            ProductStock productStock = productStockRepository.findByProductId(aggregation.productId).orElse(null);
-
-            Integer currentStock = 0;        // 물리적 재고 (availableCount)
-            Integer reservedStock = 0;       // 예약 재고 (reservedCount)
-            Integer actualAvailable = 0;     // 실제 사용 가능 (currentStock - reservedStock)
-            Integer safetyStock = 0;
-
-            if (productStock != null) {
-                currentStock = productStock.getAvailableCount() != null ?
-                        productStock.getAvailableCount().intValue() : 0;
-                reservedStock = productStock.getReservedCount() != null ?
-                        productStock.getReservedCount().intValue() : 0;
-                actualAvailable = productStock.getActualAvailableCount() != null ?
-                        productStock.getActualAvailableCount().intValue() : 0;
-                safetyStock = productStock.getSafetyCount() != null ?
-                        productStock.getSafetyCount().intValue() : 0;
-            }
-
             Integer requiredQuantity = aggregation.totalRequiredQuantity.intValue();
-            Integer availableStock = Math.max(0, actualAvailable - safetyStock);
-            Integer shortageQuantity = Math.max(0, requiredQuantity - currentStock);
+            Integer shortageQuantity = aggregation.totalShortageQuantity.intValue();
+            Integer consumptionQuantity = aggregation.totalConsumedCount.intValue();
+            String statusCode = aggregation.status;
 
-            // 상태 판단: 물리적 재고(currentStock) 기준으로 충분한지 확인
-            String statusCode = currentStock >= requiredQuantity ? "SUFFICIENT" : "INSUFFICIENT";
+            // availableStock 계산: INSUFFICIENT면 requiredQuantity - shortageQuantity, SUFFICIENT면 shortageQuantity
+            Integer availableStock;
+            if ("INSUFFICIENT".equals(statusCode)) {
+                availableStock = requiredQuantity - shortageQuantity;
+            } else {
+                availableStock = shortageQuantity;
+            }
 
             // 상태 필터링
             if (availableStatusCode != null && !availableStatusCode.isEmpty() &&
@@ -1114,21 +1192,37 @@ public class QuotationServiceImpl implements QuotationService {
                 supplierCompanyName = product.getSupplierCompany().getCompanyName();
             }
 
+            // convertStatus 계산
+            String convertStatus = "NOT_CONVERTED";  // 기본값
+            List<Mrp> mrps = mrpRepository.findByQuotationIdAndProductId(aggregation.quotationId, aggregation.productId);
+            if (!mrps.isEmpty()) {
+                Mrp mrp = mrps.get(0);  // quotationId + productId 조합은 유일
+                List<MrpRun> mrpRuns = mrpRunRepository.findByMrpId(mrp.getId());
+
+                if ("SUFFICIENT".equals(statusCode) && mrpRuns.isEmpty()) {
+                    // SUFFICIENT인데 MRP Run이 없으면
+                    convertStatus = "NOT_REQUIRED";
+                } else if (!mrpRuns.isEmpty()) {
+                    // MRP Run이 있으면
+                    convertStatus = "CONVERTED";
+                }
+                // 그 외의 경우는 기본값 "NOT_CONVERTED" 유지
+            }
+
             MrpQueryResponseDto.MrpItemDto itemDto = MrpQueryResponseDto.MrpItemDto.builder()
+                    .quotationId(aggregation.quotationId)
                     .itemId(aggregation.productId)
                     .itemName(product.getProductName())
                     .requiredQuantity(requiredQuantity)
-                    .currentStock(currentStock)          // 물리적 재고
-                    .reservedStock(reservedStock)        // 예약 재고 (추가!)
-                    .actualAvailableStock(actualAvailable) // 실제 사용 가능 (추가!)
-                    .safetyStock(safetyStock)
                     .availableStock(availableStock)
                     .availableStatusCode(statusCode)
-                    .shortageQuantity(shortageQuantity > 0 ? shortageQuantity : null)
+                    .shortageQuantity(shortageQuantity)
+                    .consumptionQuantity(consumptionQuantity)
                     .itemType(product.getCategory())
                     .procurementStartDate(aggregation.procurementStartDate)
                     .expectedArrivalDate(aggregation.expectedArrivalDate)
                     .supplierCompanyName(supplierCompanyName)
+                    .convertStatus(convertStatus)
                     .build();
 
             allItems.add(itemDto);
@@ -1142,36 +1236,46 @@ public class QuotationServiceImpl implements QuotationService {
         List<MrpQueryResponseDto.MrpItemDto> pagedItems = start < allItems.size() ?
                 allItems.subList(start, end) : new ArrayList<>();
 
-        MrpQueryResponseDto.PageInfo pageInfo = MrpQueryResponseDto.PageInfo.builder()
-                .number(page)
-                .size(size)
-                .totalElements(allItems.size())
-                .totalPages((allItems.size() + size - 1) / size)
-                .hasNext(end < allItems.size())
-                .build();
-
-        return MrpQueryResponseDto.builder()
-                .page(pageInfo)
-                .content(pagedItems)
-                .build();
+        return new org.springframework.data.domain.PageImpl<>(
+                pagedItems,
+                org.springframework.data.domain.PageRequest.of(page, size),
+                allItems.size()
+        );
     }
 
     /**
-     * MRP 집계를 위한 헬퍼 클래스
+     * MRP 집계를 위한 헬퍼 클래스 (quotationId + productId 조합)
      */
     private static class MrpAggregation {
+        String quotationId;
         String productId;
         BigDecimal totalRequiredQuantity = BigDecimal.ZERO;
+        BigDecimal totalShortageQuantity = BigDecimal.ZERO;
+        BigDecimal totalConsumedCount = BigDecimal.ZERO;
+        String status = "SUFFICIENT";  // 기본값 SUFFICIENT, 하나라도 INSUFFICIENT면 변경
         LocalDate procurementStartDate;
         LocalDate expectedArrivalDate;
 
-        MrpAggregation(String productId) {
+        MrpAggregation(String quotationId, String productId) {
+            this.quotationId = quotationId;
             this.productId = productId;
         }
 
         void addRequiredQuantity(BigDecimal quantity) {
             if (quantity != null) {
                 this.totalRequiredQuantity = this.totalRequiredQuantity.add(quantity);
+            }
+        }
+
+        void addShortageQuantity(BigDecimal quantity) {
+            if (quantity != null) {
+                this.totalShortageQuantity = this.totalShortageQuantity.add(quantity);
+            }
+        }
+
+        void addConsumedCount(BigDecimal quantity) {
+            if (quantity != null) {
+                this.totalConsumedCount = this.totalConsumedCount.add(quantity);
             }
         }
     }
@@ -1205,30 +1309,22 @@ public class QuotationServiceImpl implements QuotationService {
         mesRepository.save(mes);
         log.info("Mes 엔티티 생성 완료: mesId={}, mesNumber={}", mes.getId(), mesNumber);
 
-        // 3. BOM의 아이템들에 대한 Routing 조회
+        // 3. BOM 상세조회와 동일한 방식으로 Routing 수집 (순서 보장)
         List<BomItem> bomItems = bomItemRepository.findByBomId(bom.getId());
+        List<Routing> routings = collectRoutingsInOrderForMes(bomItems);
 
-        // 4. Routing 정보 수집 및 정렬
-        List<Routing> routings = new ArrayList<>();
-        for (BomItem bomItem : bomItems) {
-            Optional<Routing> routingOpt = routingRepository.findByBomItemId(bomItem.getId());
-            routingOpt.ifPresent(routings::add);
-        }
-
-        // 시퀀스 순으로 정렬
-        routings.sort(Comparator.comparing(Routing::getSequence));
-
-        // 5. MesOperationLog 생성
+        // 4. MesOperationLog 생성 (sequence를 1부터 재부여)
         if (routings.isEmpty()) {
             log.warn("BOM에 대한 Routing 정보가 없습니다: bomId={}", bom.getId());
             // Routing이 없어도 MES는 생성됨 (공정 없이)
         } else {
+            int sequenceNum = 1;  // 수집된 순서대로 1부터 부여
             for (Routing routing : routings) {
                 MesOperationLog operationLog = MesOperationLog.builder()
                     .id(UUID.randomUUID().toString())
                     .mesId(mes.getId())
                     .operationId(routing.getOperationId())
-                    .sequence(routing.getSequence())
+                    .sequence(sequenceNum)  // 1부터 순차적으로 부여
                     .status("PENDING")
                     // managerId는 주석처리 (추후 개발)
                     // .managerId(null)
@@ -1237,7 +1333,9 @@ public class QuotationServiceImpl implements QuotationService {
                 mesOperationLogRepository.save(operationLog);
 
                 log.info("MesOperationLog 생성: operationId={}, sequence={}",
-                        routing.getOperationId(), routing.getSequence());
+                        routing.getOperationId(), sequenceNum);
+
+                sequenceNum++;
             }
         }
 
@@ -1245,20 +1343,67 @@ public class QuotationServiceImpl implements QuotationService {
     }
 
     /**
-     * MES 번호 생성 (WO-YYYY-NNN 형식)
+     * BOM 상세조회와 동일한 방식으로 Routing 수집 (MES 생성용)
+     * BomItem을 routing sequence 순으로 처리하여 올바른 순서로 routing 수집
+     * ITEM의 경우 하위 BOM routing을 먼저 추가한 후, ITEM 자체 routing을 추가
      */
-    private String generateMesNumber() {
-        int year = LocalDate.now().getYear();
+    private List<Routing> collectRoutingsInOrderForMes(List<BomItem> bomItems) {
+        List<Routing> result = new ArrayList<>();
 
-        // 올해 생성된 MES 개수 조회하여 다음 번호 생성
-        String yearPrefix = "WO-" + year + "-";
-        List<Mes> existingMes = mesRepository.findAll().stream()
-            .filter(mes -> mes.getMesNumber() != null && mes.getMesNumber().startsWith(yearPrefix))
-            .collect(Collectors.toList());
+        // 1. BomItem을 routing sequence로 정렬하기 위해 <BomItem, Routing> 쌍으로 수집
+        List<BomItemRoutingPair> itemsWithRouting = new ArrayList<>();
+        for (BomItem bomItem : bomItems) {
+            Optional<Routing> routingOpt = routingRepository.findByBomItemId(bomItem.getId());
+            if (routingOpt.isPresent()) {
+                itemsWithRouting.add(new BomItemRoutingPair(bomItem, routingOpt.get()));
+            }
+        }
 
-        int nextNumber = existingMes.size() + 1;
+        // 2. routing sequence 순으로 정렬
+        itemsWithRouting.sort(Comparator.comparingInt(item -> item.routing.getSequence()));
 
-        return String.format("WO-%d-%03d", year, nextNumber);
+        // 3. 정렬된 순서대로 처리
+        for (BomItemRoutingPair item : itemsWithRouting) {
+            BomItem bomItem = item.bomItem;
+            Routing routing = item.routing;
+
+            if ("ITEM".equals(bomItem.getComponentType())) {
+                // ITEM의 경우: 하위 BOM의 routing을 먼저 수집
+                String childBomId = bomItem.getComponentId(); // ITEM의 componentId는 BOM ID
+                List<BomItem> childBomItems = bomItemRepository.findByBomId(childBomId);
+                List<Routing> childRoutings = collectRoutingsInOrderForMes(childBomItems);
+                result.addAll(childRoutings);
+
+                log.debug("중첩된 ITEM 처리: bomItemId={}, childBomId={}, 하위 routing {}개 수집",
+                        bomItem.getId(), childBomId, childRoutings.size());
+
+                // 그 다음에 ITEM 자체의 routing 추가 (조립 공정)
+                result.add(routing);
+                log.debug("ITEM 조립 Routing 추가: bomItemId={}, operationId={}, sequence={}",
+                        bomItem.getId(), routing.getOperationId(), routing.getSequence());
+
+            } else {
+                // MATERIAL의 경우: routing 그대로 추가
+                result.add(routing);
+                log.debug("MATERIAL Routing 추가: bomItemId={}, operationId={}, sequence={}",
+                        bomItem.getId(), routing.getOperationId(), routing.getSequence());
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * BomItem과 Routing을 함께 저장하는 헬퍼 클래스
+     */
+    private static class BomItemRoutingPair {
+        BomItem bomItem;
+        Routing routing;
+
+        BomItemRoutingPair(BomItem bomItem, Routing routing) {
+            this.bomItem = bomItem;
+            this.routing = routing;
+        }
     }
 
     /**
@@ -1287,5 +1432,114 @@ public class QuotationServiceImpl implements QuotationService {
         public void updateMaxDeliveryDays(Integer days) {
             this.maxDeliveryDays = Math.max(this.maxDeliveryDays, days);
         }
+    }
+
+    /**
+     * itemId가 같은 shortage들을 합산
+     * - requiredQuantity: 합산
+     * - currentStock: 첫 번째 값 유지 (모두 같은 값)
+     * - shortQuantity: 합산된 requiredQuantity - currentStock
+     */
+    private List<QuotationSimulateResponseDto.ShortageDto> mergeShortagesByItemId(
+            List<QuotationSimulateResponseDto.ShortageDto> shortages) {
+
+        Map<String, QuotationSimulateResponseDto.ShortageDto> mergedMap = new LinkedHashMap<>();
+
+        for (QuotationSimulateResponseDto.ShortageDto shortage : shortages) {
+            String itemId = shortage.getItemId();
+
+            if (mergedMap.containsKey(itemId)) {
+                // 이미 존재하면 requiredQuantity만 합산
+                QuotationSimulateResponseDto.ShortageDto existing = mergedMap.get(itemId);
+                int newRequiredQuantity = existing.getRequiredQuantity() + shortage.getRequiredQuantity();
+                int newShortQuantity = Math.max(0, newRequiredQuantity - existing.getCurrentStock());
+
+                existing.setRequiredQuantity(newRequiredQuantity);
+                existing.setShortQuantity(newShortQuantity);
+
+                log.debug("Shortage 합산: itemId={}, 필요수량={}+{}={}, 현재재고={}, 부족수량={}",
+                        itemId, existing.getRequiredQuantity() - shortage.getRequiredQuantity(),
+                        shortage.getRequiredQuantity(), newRequiredQuantity,
+                        existing.getCurrentStock(), newShortQuantity);
+            } else {
+                // 새로운 항목이면 추가
+                mergedMap.put(itemId, QuotationSimulateResponseDto.ShortageDto.builder()
+                        .itemId(shortage.getItemId())
+                        .itemName(shortage.getItemName())
+                        .requiredQuantity(shortage.getRequiredQuantity())
+                        .currentStock(shortage.getCurrentStock())
+                        .shortQuantity(shortage.getShortQuantity())
+                        .build());
+            }
+        }
+
+        return new ArrayList<>(mergedMap.values());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ToggleCodeLabelDto> getBomList() {
+        log.info("BOM 목록 조회 시작");
+
+        // 모든 BOM 조회
+        List<Bom> bomList = bomRepository.findAll();
+
+        // ToggleCodeLabelDto로 변환
+        List<ToggleCodeLabelDto> result = new ArrayList<>();
+
+        for (Bom bom : bomList) {
+            // BOM의 productId로 Product 조회
+            Product product = productRepository.findById(bom.getProductId()).orElse(null);
+
+            if (product != null) {
+                ToggleCodeLabelDto dto =
+                    new ToggleCodeLabelDto(
+                        product.getProductName(),  // value: productName
+                        bom.getId()                // key: bomId
+                    );
+                result.add(dto);
+            } else {
+                log.warn("BOM의 Product를 찾을 수 없습니다: bomId={}, productId={}", bom.getId(), bom.getProductId());
+            }
+        }
+
+        log.info("BOM 목록 조회 완료: {}개", result.size());
+        return result;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ToggleCodeLabelDto> getMrpQuotationList() {
+        log.info("MRP 견적 목록 조회 시작");
+
+        // MRP 테이블에서 중복 제거한 quotationId 조회
+        List<String> quotationIds = mrpRepository.findDistinctQuotationIds();
+
+        log.info("조회된 견적 ID 수: {}", quotationIds.size());
+
+        // ToggleCodeLabelDto로 변환
+        List<ToggleCodeLabelDto> result = new ArrayList<>();
+
+        for (String quotationId : quotationIds) {
+            String quotationNumber = null;
+
+            try {
+                // Business 서비스에서 견적 번호 조회
+                BusinessQuotationDto quotation = businessQuotationServicePort.getQuotationById(quotationId);
+                quotationNumber = quotation != null ? quotation.getQuotationNumber() : quotationId;
+            } catch (Exception e) {
+                log.warn("견적 정보 조회 실패: quotationId={}", quotationId);
+                quotationNumber = quotationId;
+            }
+
+            ToggleCodeLabelDto dto = new ToggleCodeLabelDto(
+                quotationNumber,  // value: quotationNumber
+                quotationId       // key: quotationId
+            );
+            result.add(dto);
+        }
+
+        log.info("MRP 견적 목록 조회 완료: {}개", result.size());
+        return result;
     }
 }

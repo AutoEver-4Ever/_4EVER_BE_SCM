@@ -9,6 +9,8 @@ import org.ever._4ever_be_scm.scm.iv.dto.PagedResponseDto;
 import org.ever._4ever_be_scm.scm.iv.dto.ShortageItemDto;
 import org.ever._4ever_be_scm.scm.iv.dto.ShortageItemPreviewDto;
 import org.ever._4ever_be_scm.scm.iv.dto.request.AddInventoryItemRequest;
+import org.ever._4ever_be_scm.scm.iv.dto.request.ItemInfoRequest;
+import org.ever._4ever_be_scm.scm.iv.dto.response.ItemInfoResponseDto;
 import org.ever._4ever_be_scm.scm.iv.dto.response.ItemToggleResponseDto;
 import org.ever._4ever_be_scm.scm.iv.service.InventoryService;
 import org.springframework.data.domain.Page;
@@ -170,5 +172,24 @@ public class InventoryController {
         java.util.List<ItemToggleResponseDto> items = inventoryService.getItemToggleList();
         
         return ResponseEntity.ok(ApiResponse.success(items, "자재 토글 목록을 조회했습니다.", HttpStatus.OK));
+    }
+
+    /**
+     * 제품 정보 목록 조회 API
+     * 
+     * @param request 제품 ID 목록 요청
+     * @return 제품 정보 목록
+     */
+    @PostMapping("/items/info")
+    @io.swagger.v3.oas.annotations.Operation(
+            summary = "제품 정보 목록 조회",
+            description = "제품 ID 배열을 받아서 해당 제품들의 itemName, itemCode, unitPrice, supplierName을 반환합니다."
+    )
+    public ResponseEntity<ApiResponse<java.util.List<ItemInfoResponseDto>>> getItemInfoList(
+            @RequestBody ItemInfoRequest request) {
+        
+        java.util.List<ItemInfoResponseDto> items = inventoryService.getItemInfoList(request.getItemIds());
+        
+        return ResponseEntity.ok(ApiResponse.success(items, "제품 정보 목록을 조회했습니다.", HttpStatus.OK));
     }
 }

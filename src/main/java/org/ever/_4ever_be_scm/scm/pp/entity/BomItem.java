@@ -24,7 +24,7 @@ public class BomItem extends TimeStamp {
     private String bomId;
 
     @Column(name = "component_type", length = 20)
-    private String componentType; // ITEM(원자재) / PRODUCT(부품, 완제품)
+    private String componentType; // MATERIAL(원자재) / ITEM(부품, 완제품)
 
     public String getComponentType() {
         return componentType == null ? "" : componentType;

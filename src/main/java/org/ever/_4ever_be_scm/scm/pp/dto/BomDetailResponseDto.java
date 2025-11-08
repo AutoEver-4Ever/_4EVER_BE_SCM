@@ -38,8 +38,6 @@ public class BomDetailResponseDto {
         private String unit;
         private String level;
         private String supplierName;
-        private String operationId;
-        private String operationName;
         private String componentType; // ITEM/PRODUCT
     }
 
@@ -60,6 +58,7 @@ public class BomDetailResponseDto {
     public static class RoutingDto {
         private Integer sequence;
         private String operationName;
+        private String itemName;
         private Integer runTime;
     }
 }

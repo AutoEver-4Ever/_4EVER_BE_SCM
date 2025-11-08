@@ -316,8 +316,12 @@ public class BomServiceImpl implements BomService {
         List<BomExplosion> explosions = bomExplosionRepository.findByParentBomId(bomId);
         List<BomDetailResponseDto.BomComponentDto> components = new ArrayList<>();
         Map<String, List<BomDetailResponseDto.LevelStructureDto>> levelStructure = new HashMap<>();
-        List<BomDetailResponseDto.RoutingDto> routingList = new ArrayList<>();
 
+        //  routing 수집을 위해 BomItem을 직접 조회하고 sequence 순으로 정렬
+        List<BomItem> bomItems = bomItemRepository.findByBomId(bomId);
+        List<BomDetailResponseDto.RoutingDto> routingList = collectRoutingsInOrder(bomItems);
+
+        // components와 levelStructure 구성 (기존 로직 유지)
         for (BomExplosion exp : explosions) {
             Optional<BomItem> bomItemOpt = bomItemRepository.findByBomIdAndComponentId(bomId, exp.getComponentProductId());
             if (bomItemOpt.isEmpty()) continue;
@@ -336,16 +340,24 @@ public class BomServiceImpl implements BomService {
             if ("ITEM".equals(bomItem.getComponentType())) {
                 BomDetailResponseDto subBomDetail = getBomDetail(bomItem.getComponentId());
                 if (subBomDetail != null) {
+                    //  ITEM의 실제 Product unit 조회
+                    String itemUnit = bomItem.getUnit(); // 기본값
+                    Optional<Bom> childBomOpt = bomRepository.findById(bomItem.getComponentId());
+                    if (childBomOpt.isPresent()) {
+                        Optional<Product> childProductOpt = productRepository.findById(childBomOpt.get().getProductId());
+                        if (childProductOpt.isPresent()) {
+                            itemUnit = childProductOpt.get().getUnit();
+                        }
+                    }
+
                     components.add(BomDetailResponseDto.BomComponentDto.builder()
                         .itemId(subBomDetail.getBomId())
                         .code(subBomDetail.getProductNumber())
                         .name(subBomDetail.getProductName())
                         .quantity(parentQuantity)
-                        .unit(bomItem.getUnit())
+                        .unit(itemUnit)  //  해당 제품의 실제 unit
                         .level(levelStr)
                         .supplierName(null)
-                        .operationId(routing != null ? routing.getOperationId() : null)
-                        .operationName(operationName)
                         .componentType(bomItem.getComponentType())
                         .build());
                     // 하위 BOM의 구성품을 parentQuantity만큼 곱해서, 레벨+1로 추가
@@ -355,11 +367,9 @@ public class BomServiceImpl implements BomService {
                             .code(subComp.getCode())
                             .name(subComp.getName())
                             .quantity(subComp.getQuantity() * parentQuantity)
-                            .unit(subComp.getUnit())
+                            .unit(subComp.getUnit())  //  이미 올바른 unit
                             .level("Level " + (parentLevel + 1))
                             .supplierName(subComp.getSupplierName())
-                            .operationId(subComp.getOperationId())
-                            .operationName(subComp.getOperationName())
                             .componentType(subComp.getComponentType())
                             .build());
                     }
@@ -379,49 +389,37 @@ public class BomServiceImpl implements BomService {
                         }
                         levelStructure.merge(newLevel, newList, (oldV, newV) -> { oldV.addAll(newV); return oldV; });
                     });
-                    // routing 시퀀스 누적 (상위 BOM의 sequence + 하위 BOM의 sequence)
-                    for (BomDetailResponseDto.RoutingDto subRouting : subBomDetail.getRouting()) {
-                        int seq = (routing != null ? routing.getSequence() : 0) + (subRouting.getSequence() != null ? subRouting.getSequence() : 0);
-                        routingList.add(BomDetailResponseDto.RoutingDto.builder()
-                            .sequence(seq)
-                            .operationName(subRouting.getOperationName())
-                            .runTime(subRouting.getRunTime())
-                            .build());
-                    }
                 }
             } else if (compProduct != null) {
+                //  MATERIAL의 실제 Product unit 사용
                 components.add(BomDetailResponseDto.BomComponentDto.builder()
                     .itemId(compProduct.getId())
                     .code(compProduct.getProductCode())
                     .name(compProduct.getProductName())
                     .quantity(parentQuantity)
-                    .unit(bomItem.getUnit())
+                    .unit(compProduct.getUnit())  //  해당 제품의 실제 unit
                     .level(levelStr)
                     .supplierName(compProduct.getSupplierCompany() != null ? compProduct.getSupplierCompany().getCompanyName() : null)
-                    .operationId(routing != null ? routing.getOperationId() : null)
-                    .operationName(operationName)
                     .componentType(bomItem.getComponentType())
                     .build());
                 levelStructure.computeIfAbsent(levelStr, k -> new ArrayList<>())
                     .add(BomDetailResponseDto.LevelStructureDto.builder()
                         .code(compProduct.getProductCode())
                         .name(compProduct.getProductName())
-                        .quantity(parentQuantity + " " + bomItem.getUnit())
+                        .quantity(parentQuantity + " " + compProduct.getUnit())  //  해당 제품의 실제 unit
                         .build());
-                routingList.add(BomDetailResponseDto.RoutingDto.builder()
-                    .sequence(routing != null ? routing.getSequence() : 0)
-                    .operationName(operationName)
-                    .runTime(routing != null ? routing.getRequiredTime() : 0)
-                    .build());
             }
         }
-        // routingList를 상대적 순서로 1부터 재부여
-        List<BomDetailResponseDto.RoutingDto> sortedRouting = new ArrayList<>(routingList);
-        sortedRouting.sort(Comparator.comparingInt(r -> r.getSequence() != null ? r.getSequence() : 0));
+
+        //  routing은 이미 올바른 순서로 수집되었으므로 1부터 재부여만
         int seqNum = 1;
-        for (BomDetailResponseDto.RoutingDto r : sortedRouting) {
+        for (BomDetailResponseDto.RoutingDto r : routingList) {
             r.setSequence(seqNum++);
         }
+
+        //  components에서 itemId가 같은 항목들을 합산 (중복 제거)
+        List<BomDetailResponseDto.BomComponentDto> mergedComponents = mergeComponentsByItemId(components);
+
         return BomDetailResponseDto.builder()
             .bomId(bom.getId())
             .bomNumber(bom.getBomCode())
@@ -431,10 +429,134 @@ public class BomServiceImpl implements BomService {
             .version("v" + bom.getVersion())
             .statusCode("ACTIVE")
             .lastModifiedAt(bom.getUpdatedAt() != null ? bom.getUpdatedAt() : null)
-            .components(components)
+            .components(mergedComponents)
             .levelStructure(levelStructure)
-            .routing(sortedRouting)
+            .routing(routingList)
             .build();
+    }
+
+    /**
+     * BomItem을 routing sequence 순으로 처리하여 올바른 순서로 routing 수집
+     * ITEM의 경우 하위 BOM routing을 먼저 추가한 후, ITEM 자체 routing을 추가
+     */
+    private List<BomDetailResponseDto.RoutingDto> collectRoutingsInOrder(List<BomItem> bomItems) {
+        List<BomDetailResponseDto.RoutingDto> result = new ArrayList<>();
+
+        // 1. BomItem을 routing sequence로 정렬하기 위해 <BomItem, Routing> 쌍으로 수집
+        List<BomItemWithRouting> itemsWithRouting = new ArrayList<>();
+        for (BomItem bomItem : bomItems) {
+            Optional<Routing> routingOpt = routingRepository.findByBomItemId(bomItem.getId());
+            if (routingOpt.isPresent()) {
+                itemsWithRouting.add(new BomItemWithRouting(bomItem, routingOpt.get()));
+            }
+        }
+
+        // 2. routing sequence 순으로 정렬
+        itemsWithRouting.sort(Comparator.comparingInt(item -> item.routing.getSequence()));
+
+        // 3. 정렬된 순서대로 처리
+        for (BomItemWithRouting item : itemsWithRouting) {
+            BomItem bomItem = item.bomItem;
+            Routing routing = item.routing;
+
+            if ("ITEM".equals(bomItem.getComponentType())) {
+                //  ITEM의 경우: 하위 BOM의 routing을 먼저 수집
+                String childBomId = bomItem.getComponentId(); // ITEM의 componentId는 BOM ID
+                List<BomItem> childBomItems = bomItemRepository.findByBomId(childBomId);
+                List<BomDetailResponseDto.RoutingDto> childRoutings = collectRoutingsInOrder(childBomItems);
+                result.addAll(childRoutings);
+
+                //  그 다음에 ITEM 자체의 routing 추가 (조립 공정)
+                String operationName = null;
+                if (routing.getOperationId() != null) {
+                    operationName = operationRepository.findById(routing.getOperationId())
+                        .map(Operation::getOpName).orElse(null);
+                }
+
+                // ITEM의 Product 조회 (BOM → productId → Product)
+                String productName = null;
+                Optional<Bom> bomOpt = bomRepository.findById(childBomId);
+                if (bomOpt.isPresent()) {
+                    String productId = bomOpt.get().getProductId();
+                    productName = productRepository.findById(productId)
+                        .map(Product::getProductName).orElse(null);
+                }
+
+                result.add(BomDetailResponseDto.RoutingDto.builder()
+                    .sequence(0)  // 임시 값, 나중에 재부여됨
+                    .itemName(productName)
+                    .operationName(operationName)
+                    .runTime(routing.getRequiredTime())
+                    .build());
+
+            } else {
+                //  MATERIAL의 경우: routing 그대로 추가
+                String operationName = null;
+                if (routing.getOperationId() != null) {
+                    operationName = operationRepository.findById(routing.getOperationId())
+                        .map(Operation::getOpName).orElse(null);
+                }
+
+                // MATERIAL의 Product 조회 (componentId가 바로 productId)
+                String productName = productRepository.findById(bomItem.getComponentId())
+                    .map(Product::getProductName).orElse(null);
+
+                result.add(BomDetailResponseDto.RoutingDto.builder()
+                    .sequence(0)  // 임시 값, 나중에 재부여됨
+                    .itemName(productName)
+                    .operationName(operationName)
+                    .runTime(routing.getRequiredTime())
+                    .build());
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * BomItem과 Routing을 함께 저장하는 헬퍼 클래스
+     */
+    private static class BomItemWithRouting {
+        BomItem bomItem;
+        Routing routing;
+
+        BomItemWithRouting(BomItem bomItem, Routing routing) {
+            this.bomItem = bomItem;
+            this.routing = routing;
+        }
+    }
+
+    /**
+     * itemId가 같은 component들을 합산 (수량만 합산, 나머지는 첫 번째 항목 유지)
+     */
+    private List<BomDetailResponseDto.BomComponentDto> mergeComponentsByItemId(
+            List<BomDetailResponseDto.BomComponentDto> components) {
+
+        Map<String, BomDetailResponseDto.BomComponentDto> mergedMap = new LinkedHashMap<>();
+
+        for (BomDetailResponseDto.BomComponentDto component : components) {
+            String itemId = component.getItemId();
+
+            if (mergedMap.containsKey(itemId)) {
+                // 이미 존재하면 수량만 합산
+                BomDetailResponseDto.BomComponentDto existing = mergedMap.get(itemId);
+                existing.setQuantity(existing.getQuantity() + component.getQuantity());
+            } else {
+                // 새로운 항목이면 추가 (operationId, operationName 제거)
+                mergedMap.put(itemId, BomDetailResponseDto.BomComponentDto.builder()
+                    .itemId(component.getItemId())
+                    .code(component.getCode())
+                    .name(component.getName())
+                    .quantity(component.getQuantity())
+                    .unit(component.getUnit())
+                    .level(component.getLevel())
+                    .supplierName(component.getSupplierName())
+                    .componentType(component.getComponentType())
+                    .build());
+            }
+        }
+
+        return new ArrayList<>(mergedMap.values());
     }
 
     @Override

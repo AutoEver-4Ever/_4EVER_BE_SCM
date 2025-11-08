@@ -34,19 +34,18 @@ public class MrpQueryResponseDto {
     @AllArgsConstructor
     @Builder
     public static class MrpItemDto {
+        private String quotationId;             // 견적 ID (견적별 그룹화)
         private String itemId;
         private String itemName;
-        private Integer requiredQuantity;
-        private Integer currentStock;           // 물리적 재고 (availableCount)
-        private Integer reservedStock;          // 예약된 재고 (reservedCount) - 추가!
-        private Integer actualAvailableStock;   // 실제 사용 가능 재고 (currentStock - reservedStock) - 추가!
-        private Integer safetyStock;
-        private Integer availableStock;
-        private String availableStatusCode; // "SUFFICIENT", "INSUFFICIENT"
-        private Integer shortageQuantity;
-        private String itemType; // "구매품"
+        private Integer requiredQuantity;       // MRP 테이블의 requiredCount
+        private Integer availableStock;         // INSUFFICIENT: requiredQuantity - shortageQuantity, SUFFICIENT: shortageQuantity
+        private String availableStatusCode;     // MRP 테이블의 status ("SUFFICIENT", "INSUFFICIENT")
+        private Integer shortageQuantity;       // MRP 테이블의 shortageQuantity
+        private Integer consumptionQuantity;    // MRP 테이블의 consumedCount
+        private String itemType;                // "구매품"
         private LocalDate procurementStartDate;
         private LocalDate expectedArrivalDate;
         private String supplierCompanyName;
+        private String convertStatus;           // MRP Run 전환 상태 ("NOT_CONVERTED", "CONVERTED", "NOT_REQUIRED")
     }
 }

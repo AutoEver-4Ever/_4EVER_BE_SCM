@@ -33,6 +33,18 @@ public class Mrp extends TimeStamp {
     @Column(name = "required_count")
     private BigDecimal requiredCount;
 
+    /**
+     * 부족량 (조달 필요량)
+     */
+    @Column(name = "shortage_quantity")
+    private BigDecimal shortageQuantity;
+
+    /**
+     * 이미 소비된 양 (MES 실행 시 증가)
+     */
+    @Column(name = "consumed_count")
+    private BigDecimal consumedCount;
+
     @Column(name = "procurement_start")
     private LocalDate procurementStart;
 

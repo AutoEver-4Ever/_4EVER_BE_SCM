@@ -18,7 +18,8 @@ import org.ever._4ever_be_scm.scm.pp.service.MesService;
 import org.ever.event.MesCompleteEvent;
 import org.ever.event.MesStartEvent;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -26,13 +27,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.async.DeferredResult;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -43,22 +43,23 @@ public class MesServiceImpl implements MesService {
     private final MesOperationLogRepository mesOperationLogRepository;
     private final BomRepository bomRepository;
     private final BomItemRepository bomItemRepository;
-    private final RoutingRepository routingRepository;
     private final OperationRepository operationRepository;
     private final ProductRepository productRepository;
     private final ProductStockRepository productStockRepository;
+    private final MrpRepository mrpRepository;
+    private final MrpRunRepository mrpRunRepository;
     private final BusinessQuotationServicePort businessQuotationServicePort;
     private final org.ever._4ever_be_scm.infrastructure.kafka.producer.KafkaProducerService kafkaProducerService;
     private final org.ever._4ever_be_scm.common.async.GenericAsyncResultManager<Void> asyncResultManager;
 
     @Override
     @Transactional(readOnly = true)
-    public MesQueryResponseDto getMesList(String quotationId, String status, int page, int size) {
+    public Page<MesQueryResponseDto.MesItemDto> getMesList(String quotationId, String status, Pageable pageable) {
         log.info("MES 목록 조회: quotationId={}, status={}, page={}, size={}",
-                quotationId, status, page, size);
+                quotationId, status, pageable.getPageNumber(), pageable.getPageSize());
 
         // 1. 조건에 맞는 MES 조회
-        Page<Mes> mesPage = mesRepository.findWithFilters(quotationId, status, PageRequest.of(page, size));
+        Page<Mes> mesPage = mesRepository.findWithFilters(quotationId, status, pageable);
 
         // 2. DTO 변환
         List<MesQueryResponseDto.MesItemDto> items = new ArrayList<>();
@@ -83,22 +84,37 @@ public class MesServiceImpl implements MesService {
                     .findByMesIdOrderBySequenceAsc(mes.getId());
 
             List<String> sequence = new ArrayList<>();
-            String currentOperation = null;
+            Integer currentOperation = null;
+            boolean hasInProgress = false;
+            boolean allCompleted = true;
 
             for (MesOperationLog log : operationLogs) {
                 Operation operation = operationRepository.findById(log.getOperationId()).orElse(null);
                 if (operation != null) {
                     sequence.add(operation.getOpCode());
 
+                    // 진행중인 공정이 있으면 그 공정의 sequence 번호 저장
                     if ("IN_PROGRESS".equals(log.getStatus())) {
-                        currentOperation = operation.getOpCode();
+                        currentOperation = log.getSequence();
+                        hasInProgress = true;
+                    }
+
+                    // 완료되지 않은 공정이 있으면 allCompleted = false
+                    if (!"COMPLETED".equals(log.getStatus())) {
+                        allCompleted = false;
                     }
                 }
             }
 
-            // 현재 공정이 없고 PENDING 상태면 첫 공정
-            if (currentOperation == null && !sequence.isEmpty() && "PENDING".equals(mes.getStatus())) {
-                currentOperation = sequence.get(0);
+            // 진행중인 공정이 없으면 상태에 따라 결정
+            if (!hasInProgress) {
+                if (allCompleted && !operationLogs.isEmpty()) {
+                    // 모두 완료되면 0
+                    currentOperation = 0;
+                } else {
+                    // 모두 대기중이거나 일부 대기중이면 1
+                    currentOperation = 1;
+                }
             }
 
             MesQueryResponseDto.MesItemDto itemDto = MesQueryResponseDto.MesItemDto.builder()
@@ -121,13 +137,7 @@ public class MesServiceImpl implements MesService {
             items.add(itemDto);
         }
 
-        return MesQueryResponseDto.builder()
-                .size(size)
-                .totalPages(mesPage.getTotalPages())
-                .page(page)
-                .totalElements((int) mesPage.getTotalElements())
-                .content(items)
-                .build();
+        return new PageImpl<>(items, pageable, mesPage.getTotalElements());
     }
 
     @Override
@@ -172,6 +182,7 @@ public class MesServiceImpl implements MesService {
             // }
 
             MesDetailResponseDto.OperationDto operationDto = MesDetailResponseDto.OperationDto.builder()
+                    .mesOperationLogId(log.getId())  // MesOperationLog의 ID 반환
                     .operationNumber(operation.getOpCode())
                     .operationName(operation.getOpName())
                     .sequence(log.getSequence())
@@ -187,6 +198,42 @@ public class MesServiceImpl implements MesService {
             if ("IN_PROGRESS".equals(log.getStatus())) {
                 currentOperation = operation.getOpCode();
             }
+        }
+
+        // 3-1. 각 공정의 버튼 활성화 여부 계산
+        for (int i = 0; i < operations.size(); i++) {
+            MesDetailResponseDto.OperationDto operation = operations.get(i);
+            String status = operation.getStatusCode();
+
+            // 공정 시작 버튼 활성화 조건
+            boolean canStart = false;
+            if ("PENDING".equals(status)) {
+                if (i == 0) {
+                    // 첫 번째 공정: MES가 IN_PROGRESS이면 시작 가능
+                    canStart = "IN_PROGRESS".equals(mes.getStatus());
+                } else {
+                    // 나머지 공정: 이전 공정이 COMPLETED이면 시작 가능
+                    MesDetailResponseDto.OperationDto prevOperation = operations.get(i - 1);
+                    canStart = "COMPLETED".equals(prevOperation.getStatusCode());
+                }
+            }
+
+            // 공정 완료 버튼 활성화 조건
+            boolean canComplete = "IN_PROGRESS".equals(status);
+
+            operation.setCanStart(canStart);
+            operation.setCanComplete(canComplete);
+        }
+
+        // 3-2. MES 버튼 활성화 여부 계산
+        boolean canStartMes = "PENDING".equals(mes.getStatus());
+
+        boolean canCompleteMes = false;
+        if ("IN_PROGRESS".equals(mes.getStatus())) {
+            // 모든 공정이 COMPLETED인지 확인
+            boolean allCompleted = operations.stream()
+                    .allMatch(op -> "COMPLETED".equals(op.getStatusCode()));
+            canCompleteMes = allCompleted;
         }
 
         // 4. Plan 정보
@@ -207,6 +254,8 @@ public class MesServiceImpl implements MesService {
                 .plan(plan)
                 .currentOperation(currentOperation)
                 .operations(operations)
+                .canStartMes(canStartMes)
+                .canCompleteMes(canCompleteMes)
                 .build();
     }
 
@@ -241,6 +290,8 @@ public class MesServiceImpl implements MesService {
 
             // 3. MES 상태 변경
             mes.setStatus("IN_PROGRESS");
+            mes.setStartDate(LocalDate.now());
+            mes.setEndDate(null);
             mesRepository.save(mes);
 
             // 4. 자재 소비
@@ -277,74 +328,80 @@ public class MesServiceImpl implements MesService {
 
     @Override
     @Transactional
-    public void startOperation(String mesId, String operationId, String managerId) {
-        log.info("공정 시작: mesId={}, operationId={}, managerId={}", mesId, operationId, managerId);
+    public void startOperation(String mesId, String logId, String managerId) {
+        log.info("공정 시작: mesId={}, logId={}, managerId={}", mesId, logId, managerId);
 
         // 1. MES 조회
         Mes mes = mesRepository.findById(mesId)
                 .orElseThrow(() -> new RuntimeException("MES를 찾을 수 없습니다: " + mesId));
 
-        // 2. MesOperationLog 조회
-        List<MesOperationLog> operationLogs = mesOperationLogRepository.findByMesIdOrderBySequenceAsc(mesId);
-        MesOperationLog targetLog = operationLogs.stream()
-                .filter(log -> operationId.equals(log.getOperationId()))
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("공정을 찾을 수 없습니다: " + operationId));
+        // 2. MesOperationLog 직접 조회 (logId로)
+        MesOperationLog targetLog = mesOperationLogRepository.findById(logId)
+                .orElseThrow(() -> new RuntimeException("공정 로그를 찾을 수 없습니다: " + logId));
+
+        // 3. mesId 검증
+        if (!mesId.equals(targetLog.getMesId())) {
+            throw new RuntimeException("해당 공정은 이 MES에 속하지 않습니다: mesId=" + mesId + ", logId=" + logId);
+        }
 
         if (!"PENDING".equals(targetLog.getStatus())) {
             throw new RuntimeException("PENDING 상태의 공정만 시작할 수 있습니다. 현재 상태: " + targetLog.getStatus());
         }
 
-        // 3. 이전 공정들이 모두 완료되었는지 확인
+        // 4. 이전 공정들이 모두 완료되었는지 확인
+        List<MesOperationLog> operationLogs = mesOperationLogRepository.findByMesIdOrderBySequenceAsc(mesId);
         for (MesOperationLog log : operationLogs) {
             if (log.getSequence() < targetLog.getSequence() && !"COMPLETED".equals(log.getStatus())) {
                 throw new RuntimeException("이전 공정이 완료되지 않았습니다. sequence: " + log.getSequence());
             }
         }
 
-        // 4. 공정 시작
+        // 5. 공정 시작
         targetLog.start(managerId);
         mesOperationLogRepository.save(targetLog);
 
-        // 5. MES의 currentOperationId 업데이트
-        mes.setCurrentOperationId(operationId);
+        // 6. MES의 currentOperationId 업데이트
+        mes.setCurrentOperationId(targetLog.getOperationId());
         mesRepository.save(mes);
 
-        log.info("공정 시작 완료: operationId={}, status=IN_PROGRESS", operationId);
+        log.info("공정 시작 완료: logId={}, operationId={}, status=IN_PROGRESS", logId, targetLog.getOperationId());
     }
 
     @Override
     @Transactional
-    public void completeOperation(String mesId, String operationId) {
-        log.info("공정 완료: mesId={}, operationId={}", mesId, operationId);
+    public void completeOperation(String mesId, String logId) {
+        log.info("공정 완료: mesId={}, logId={}", mesId, logId);
 
         // 1. MES 조회
         Mes mes = mesRepository.findById(mesId)
                 .orElseThrow(() -> new RuntimeException("MES를 찾을 수 없습니다: " + mesId));
 
-        // 2. MesOperationLog 조회
-        List<MesOperationLog> operationLogs = mesOperationLogRepository.findByMesIdOrderBySequenceAsc(mesId);
-        MesOperationLog targetLog = operationLogs.stream()
-                .filter(log -> operationId.equals(log.getOperationId()))
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("공정을 찾을 수 없습니다: " + operationId));
+        // 2. MesOperationLog 직접 조회 (logId로)
+        MesOperationLog targetLog = mesOperationLogRepository.findById(logId)
+                .orElseThrow(() -> new RuntimeException("공정 로그를 찾을 수 없습니다: " + logId));
+
+        // 3. mesId 검증
+        if (!mesId.equals(targetLog.getMesId())) {
+            throw new RuntimeException("해당 공정은 이 MES에 속하지 않습니다: mesId=" + mesId + ", logId=" + logId);
+        }
 
         if (!"IN_PROGRESS".equals(targetLog.getStatus())) {
             throw new RuntimeException("IN_PROGRESS 상태의 공정만 완료할 수 있습니다. 현재 상태: " + targetLog.getStatus());
         }
 
-        // 3. 공정 완료
+        // 4. 공정 완료
         targetLog.complete();
         mesOperationLogRepository.save(targetLog);
 
-        // 4. 진행률 계산 및 업데이트
+        // 5. 진행률 계산 및 업데이트
+        List<MesOperationLog> operationLogs = mesOperationLogRepository.findByMesIdOrderBySequenceAsc(mesId);
         long completedCount = operationLogs.stream()
                 .filter(log -> "COMPLETED".equals(log.getStatus()))
                 .count();
         int progressRate = (int) ((completedCount * 100) / operationLogs.size());
         mes.setProgressRate(progressRate);
 
-        // 5. 다음 공정이 있으면 currentOperationId 업데이트, 없으면 null
+        // 6. 다음 공정이 있으면 currentOperationId 업데이트, 없으면 null
         MesOperationLog nextLog = operationLogs.stream()
                 .filter(log -> log.getSequence() > targetLog.getSequence())
                 .filter(log -> "PENDING".equals(log.getStatus()))
@@ -359,7 +416,8 @@ public class MesServiceImpl implements MesService {
 
         mesRepository.save(mes);
 
-        log.info("공정 완료: operationId={}, status=COMPLETED, progressRate={}%", operationId, progressRate);
+        log.info("공정 완료: logId={}, operationId={}, status=COMPLETED, progressRate={}%",
+                logId, targetLog.getOperationId(), progressRate);
     }
 
     @Override
@@ -412,7 +470,7 @@ public class MesServiceImpl implements MesService {
                     .toList();
 
             boolean allMesCompleted = allMesForQuotation.stream()
-                    .allMatch(m -> "COMPLETED".equals(m.getStatus()) || "SKIP".equals(m.getStatus()));
+                    .allMatch(m -> "COMPLETED".equals(m.getStatus()));
 
             log.info("Quotation MES 상태 확인: quotationId={}, 전체MES={}, 완료여부={}",
                     quotationId, allMesForQuotation.size(), allMesCompleted);
@@ -456,9 +514,13 @@ public class MesServiceImpl implements MesService {
 
     /**
      * 자재 가용성 검증 (MES 시작 전)
+     * - 견적별 MRP 할당량 추적
+     * - MRP Run 입고 완료 확인
+     * - 물리적 재고 확인
      */
     private void validateMaterialsAvailability(Mes mes) {
-        log.info("자재 가용성 검증 시작: mesId={}, bomId={}", mes.getId(), mes.getBomId());
+        log.info("자재 가용성 검증 시작: mesId={}, bomId={}, quotationId={}",
+                mes.getId(), mes.getBomId(), mes.getQuotationId());
 
         // 1. BOM 조회
         Bom bom = bomRepository.findById(mes.getBomId()).orElse(null);
@@ -467,10 +529,10 @@ public class MesServiceImpl implements MesService {
             return;
         }
 
-        // 2. BOM의 모든 원자재 검증 (재귀적)
+        // 2. BOM의 모든 원자재 검증 (재귀적, quotationId 전달)
         Set<String> processedProducts = new HashSet<>();
         List<String> shortageItems = new ArrayList<>();
-        validateBomMaterials(bom, mes.getQuantity(), processedProducts, shortageItems);
+        validateBomMaterials(bom, mes.getQuantity(), mes.getQuotationId(), processedProducts, shortageItems);
 
         // 3. 부족한 자재가 있으면 에러 발생
         if (!shortageItems.isEmpty()) {
@@ -479,13 +541,15 @@ public class MesServiceImpl implements MesService {
             throw new RuntimeException(errorMessage);
         }
 
-        log.info("자재 가용성 검증 완료: mesId={}, 모든 자재 충분", mes.getId());
+        log.info("자재 가용성 검증 완료: mesId={}, quotationId={}, 모든 자재 충분",
+                mes.getId(), mes.getQuotationId());
     }
 
     /**
-     * BOM 자재 재귀적 검증
+     * BOM 자재 재귀적 검증 (견적별 MRP 할당량 추적)
      */
-    private void validateBomMaterials(Bom bom, Integer quantity, Set<String> processedProducts, List<String> shortageItems) {
+    private void validateBomMaterials(Bom bom, Integer quantity, String quotationId,
+                                      Set<String> processedProducts, List<String> shortageItems) {
         List<BomItem> bomItems = bomItemRepository.findByBomId(bom.getId());
 
         for (BomItem bomItem : bomItems) {
@@ -498,37 +562,87 @@ public class MesServiceImpl implements MesService {
             BigDecimal requiredQuantity = bomItem.getCount().multiply(BigDecimal.valueOf(quantity));
 
             if ("MATERIAL".equals(bomItem.getComponentType())) {
-                // 원자재: 재고 확인
-                ProductStock stock = productStockRepository.findByProductId(bomItem.getComponentId()).orElse(null);
+                // 원자재: 견적별 MRP 기반 검증
+                String productId = bomItem.getComponentId();
+                Product product = productRepository.findById(productId).orElse(null);
+                String productName = product != null ? product.getProductName() : productId;
 
-                if (stock == null) {
-                    Product product = productRepository.findById(bomItem.getComponentId()).orElse(null);
-                    String productName = product != null ? product.getProductName() : bomItem.getComponentId();
-                    shortageItems.add(productName + " (재고 없음)");
-                    log.warn("재고가 없습니다: productId={}, 필요량={}", bomItem.getComponentId(), requiredQuantity);
+                // 1. 해당 견적의 MRP 조회
+                List<Mrp> mrpList = mrpRepository.findByQuotationIdAndProductId(quotationId, productId);
+
+                if (mrpList.isEmpty()) {
+                    shortageItems.add(productName + " (MRP 기록 없음)");
+                    log.warn("MRP 기록 없음: quotationId={}, productId={}", quotationId, productId);
                     continue;
                 }
 
-                // 실제 재고(availableCount)가 충분한지 확인
-                // 예약된 것이든 아니든, 물리적으로 존재하는지만 확인
-                BigDecimal currentAvailable = stock.getAvailableCount() != null
-                        ? stock.getAvailableCount()
-                        : BigDecimal.ZERO;
+                Mrp mrp = mrpList.get(0);  // quotationId + productId 조합은 유일
 
-                if (currentAvailable.compareTo(requiredQuantity) < 0) {
-                    Product product = productRepository.findById(bomItem.getComponentId()).orElse(null);
-                    String productName = product != null ? product.getProductName() : bomItem.getComponentId();
-                    shortageItems.add(String.format("%s (필요: %s, 현재: %s)",
-                            productName, requiredQuantity, currentAvailable));
-                    log.warn("재고 부족: productId={}, 필요량={}, 현재재고={}",
-                            bomItem.getComponentId(), requiredQuantity, currentAvailable);
+                // 2. 견적별 남은 할당량 확인
+                BigDecimal allocatedQty = mrp.getRequiredCount() != null ? mrp.getRequiredCount() : BigDecimal.ZERO;
+                BigDecimal alreadyConsumed = mrp.getConsumedCount() != null ? mrp.getConsumedCount() : BigDecimal.ZERO;
+                BigDecimal remainingAllocation = allocatedQty.subtract(alreadyConsumed);
+
+                if (remainingAllocation.compareTo(requiredQuantity) < 0) {
+                    shortageItems.add(String.format("%s (할당량 초과: 필요=%s, 남은할당=%s)",
+                            productName, requiredQuantity, remainingAllocation));
+                    log.warn("할당량 초과: quotationId={}, productId={}, 필요량={}, 남은할당={}",
+                            quotationId, productId, requiredQuantity, remainingAllocation);
+                    continue;
+                }
+
+                // 3. INSUFFICIENT인 경우 MRP Run 입고 완료 확인
+                if ("INSUFFICIENT".equals(mrp.getStatus())) {
+                    List<MrpRun> completedRuns = mrpRunRepository
+                            .findByQuotationIdAndProductIdAndStatus(quotationId, productId, "COMPLETED");
+
+                    if (completedRuns.isEmpty()) {
+                        shortageItems.add(productName + " (입고 미완료)");
+                        log.warn("입고 미완료: quotationId={}, productId={}", quotationId, productId);
+                        continue;
+                    }
+
+                    BigDecimal arrivedQty = completedRuns.stream()
+                            .map(MrpRun::getQuantity)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                    BigDecimal expectedArrival = mrp.getShortageQuantity() != null
+                            ? mrp.getShortageQuantity() : BigDecimal.ZERO;
+
+                    if (arrivedQty.compareTo(expectedArrival) < 0) {
+                        shortageItems.add(String.format("%s (입고 부족: 필요=%s, 입고=%s)",
+                                productName, expectedArrival, arrivedQty));
+                        log.warn("입고 부족: quotationId={}, productId={}, 필요입고={}, 실제입고={}",
+                                quotationId, productId, expectedArrival, arrivedQty);
+                        continue;
+                    }
+                }
+
+                // 4. 물리적 재고 최종 확인
+                ProductStock stock = productStockRepository.findByProductId(productId).orElse(null);
+
+                if (stock == null) {
+                    shortageItems.add(productName + " (재고 없음)");
+                    log.warn("재고 없음: productId={}", productId);
+                    continue;
+                }
+
+                BigDecimal availableQty = stock.getAvailableCount() != null
+                        ? stock.getAvailableCount() : BigDecimal.ZERO;
+
+                if (availableQty.compareTo(requiredQuantity) < 0) {
+                    shortageItems.add(String.format("%s (물리적 재고 부족: 필요=%s, 현재=%s)",
+                            productName, requiredQuantity, availableQty));
+                    log.warn("물리적 재고 부족: productId={}, 필요량={}, 현재재고={}",
+                            productId, requiredQuantity, availableQty);
                 }
 
             } else if ("ITEM".equals(bomItem.getComponentType())) {
                 // 부품: 하위 BOM 검증
                 Bom childBom = bomRepository.findByProductId(bomItem.getComponentId()).orElse(null);
                 if (childBom != null) {
-                    validateBomMaterials(childBom, requiredQuantity.intValue(), processedProducts, shortageItems);
+                    validateBomMaterials(childBom, requiredQuantity.intValue(), quotationId,
+                            processedProducts, shortageItems);
                 }
             }
         }
@@ -538,7 +652,8 @@ public class MesServiceImpl implements MesService {
      * 자재 소비 처리 (MES 시작 시)
      */
     private void consumeMaterials(Mes mes) {
-        log.info("자재 소비 시작: mesId={}, bomId={}", mes.getId(), mes.getBomId());
+        log.info("자재 소비 시작: mesId={}, bomId={}, quotationId={}",
+                mes.getId(), mes.getBomId(), mes.getQuotationId());
 
         // 1. BOM 조회
         Bom bom = bomRepository.findById(mes.getBomId()).orElse(null);
@@ -547,17 +662,17 @@ public class MesServiceImpl implements MesService {
             return;
         }
 
-        // 2. BOM의 모든 원자재 소비 (재귀적)
+        // 2. BOM의 모든 원자재 소비 (재귀적, quotationId 전달)
         Set<String> processedProducts = new HashSet<>();
-        consumeBomMaterials(bom, mes.getQuantity(), processedProducts);
+        consumeBomMaterials(bom, mes.getQuantity(), mes.getQuotationId(), processedProducts);
 
-        log.info("자재 소비 완료: mesId={}", mes.getId());
+        log.info("자재 소비 완료: mesId={}, quotationId={}", mes.getId(), mes.getQuotationId());
     }
 
     /**
-     * BOM의 자재 재귀적 소비
+     * BOM의 자재 재귀적 소비 (quotationId 전달하여 MRP 소비량 기록)
      */
-    private void consumeBomMaterials(Bom bom, Integer quantity, Set<String> processedProducts) {
+    private void consumeBomMaterials(Bom bom, Integer quantity, String quotationId, Set<String> processedProducts) {
         List<BomItem> bomItems = bomItemRepository.findByBomId(bom.getId());
 
         for (BomItem bomItem : bomItems) {
@@ -570,14 +685,14 @@ public class MesServiceImpl implements MesService {
             BigDecimal requiredQuantity = bomItem.getCount().multiply(BigDecimal.valueOf(quantity));
 
             if ("MATERIAL".equals(bomItem.getComponentType())) {
-                // 원자재: 재고 소비
-                consumeStock(bomItem.getComponentId(), requiredQuantity);
+                // 원자재: 재고 소비 + MRP 소비량 기록
+                consumeStock(bomItem.getComponentId(), requiredQuantity, quotationId);
 
             } else if ("ITEM".equals(bomItem.getComponentType())) {
                 // 부품: 하위 BOM 탐색
                 Bom childBom = bomRepository.findByProductId(bomItem.getComponentId()).orElse(null);
                 if (childBom != null) {
-                    consumeBomMaterials(childBom, requiredQuantity.intValue(), processedProducts);
+                    consumeBomMaterials(childBom, requiredQuantity.intValue(), quotationId, processedProducts);
                 }
             }
         }
@@ -586,7 +701,8 @@ public class MesServiceImpl implements MesService {
     /**
      * 재고 소비 (availableCount 감소, reservedCount 해제)
      */
-    private void consumeStock(String productId, BigDecimal quantity) {
+    private void consumeStock(String productId, BigDecimal quantity, String quotationId) {
+        // 1. 물리적 재고 소비
         ProductStock stock = productStockRepository.findByProductId(productId).orElse(null);
 
         if (stock == null) {
@@ -600,6 +716,22 @@ public class MesServiceImpl implements MesService {
 
         log.info("재고 소비: productId={}, 소비량={}, 현재={}, 예약={}",
                 productId, quantity, stock.getAvailableCount(), stock.getReservedCount());
+
+        // 2. MRP의 consumedCount 증가 (견적별 소비 추적)
+        List<Mrp> mrpList = mrpRepository.findByQuotationIdAndProductId(quotationId, productId);
+
+        if (!mrpList.isEmpty()) {
+            Mrp mrp = mrpList.get(0);
+            BigDecimal currentConsumed = mrp.getConsumedCount() != null
+                    ? mrp.getConsumedCount() : BigDecimal.ZERO;
+            mrp.setConsumedCount(currentConsumed.add(quantity));
+            mrpRepository.save(mrp);
+
+            log.info("MRP 소비량 기록: quotationId={}, productId={}, 소비량={}, 총소비={}",
+                    quotationId, productId, quantity, mrp.getConsumedCount());
+        } else {
+            log.warn("MRP 기록을 찾을 수 없습니다: quotationId={}, productId={}", quotationId, productId);
+        }
     }
 
     /**
@@ -617,7 +749,7 @@ public class MesServiceImpl implements MesService {
             throw new RuntimeException("재고가 없는 제품입니다.");
         } else {
             // 재고에 증가 (forShipmentCount 증가)
-            BigDecimal forShipmentCount = stock.getAvailableCount() != null
+            BigDecimal forShipmentCount = stock.getForShipmentCount() != null
                     ? stock.getForShipmentCount()
                     : BigDecimal.ZERO;
 

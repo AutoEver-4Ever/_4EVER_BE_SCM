@@ -44,28 +44,29 @@ public class MrpServiceImpl implements MrpService {
         log.info("MRP → MRP_RUN 전환 시작: items={}", requestDto.getItems().size());
 
         for (MrpRunConvertRequestDto.MrpItemRequest item : requestDto.getItems()) {
+            String quotationId = item.getQuotationId();
             String productId = item.getItemId();
             BigDecimal quantity = item.getQuantity();
 
-            // 1. 해당 원자재에 대한 MRP 조회 (가장 빠른 조달일 기준)
-            List<Mrp> mrpList = mrpRepository.findAll().stream()
-                    .filter(mrp -> productId.equals(mrp.getProductId()))
-                    .sorted((m1, m2) -> {
-                        if (m1.getProcurementStart() == null) return 1;
-                        if (m2.getProcurementStart() == null) return -1;
-                        return m1.getProcurementStart().compareTo(m2.getProcurementStart());
-                    })
-                    .collect(Collectors.toList());
+            // 1. 해당 견적+원자재의 MRP 조회
+            List<Mrp> mrpList = mrpRepository.findByQuotationIdAndProductId(quotationId, productId);
 
             if (mrpList.isEmpty()) {
-                log.warn("MRP를 찾을 수 없습니다: productId={}", productId);
+                log.warn("MRP를 찾을 수 없습니다: quotationId={}, productId={}", quotationId, productId);
                 continue;
             }
 
-            Mrp earliestMrp = mrpList.get(0);
+            Mrp mrp = mrpList.get(0);  // quotationId + productId 조합은 유일
 
-            // 2. 견적 번호 조회
-            String quotationId = earliestMrp.getQuotationId();
+            // 2. 중복 체크: 이미 convert된 MRP인지 확인
+            List<MrpRun> existingRuns = mrpRunRepository.findByMrpId(mrp.getId());
+            if (!existingRuns.isEmpty()) {
+                log.warn("이미 구매 요청으로 전환된 MRP입니다: mrpId={}, existingMrpRunId={}",
+                    mrp.getId(), existingRuns.get(0).getId());
+                throw new RuntimeException("이미 구매 요청으로 전환된 MRP입니다: " + mrp.getId());
+            }
+
+            // 3. 견적 번호 조회 (표시용)
             String quotationNumber = null;
             try {
                 BusinessQuotationDto quotation = businessQuotationServicePort.getQuotationById(quotationId);
@@ -75,20 +76,21 @@ public class MrpServiceImpl implements MrpService {
                 quotationNumber = quotationId;
             }
 
-            // 3. MRP_RUN 생성
+            // 4. MRP_RUN 생성
             MrpRun mrpRun = MrpRun.builder()
                     .productId(productId)
                     .quantity(quantity)
                     .quotationId(quotationId)
-                    .procurementStart(earliestMrp.getProcurementStart())
-                    .expectedArrival(earliestMrp.getExpectedArrival())
-                    .status("PENDING")  // 초기 상태는 PENDING
+                    .procurementStart(mrp.getProcurementStart())
+                    .expectedArrival(mrp.getExpectedArrival())
+                    .mrpId(mrp.getId())   // MRP ID 저장
+                    .status("INITIAL")    // 초기 상태는 INITIAL (구매요청 생성 전)
                     .build();
 
             mrpRunRepository.save(mrpRun);
 
-            log.info("MRP_RUN 생성 완료: productId={}, quantity={}, status=PENDING",
-                    productId, quantity);
+            log.info("MRP_RUN 생성 완료: mrpId={}, quotationId={}, productId={}, quantity={}, status=INITIAL",
+                    mrp.getId(), quotationId, productId, quantity);
         }
 
         log.info("MRP → MRP_RUN 전환 완료");
@@ -96,12 +98,32 @@ public class MrpServiceImpl implements MrpService {
 
     @Override
     @Transactional(readOnly = true)
-    public MrpRunQueryResponseDto getMrpRunList(String status, int page, int size) {
-        log.info("MRP 계획주문 목록 조회: status={}, page={}, size={}", status, page, size);
+    public MrpRunQueryResponseDto getMrpRunList(String status, String quotationId, int page, int size) {
+        log.info("MRP 계획주문 목록 조회: status={}, quotationId={}, page={}, size={}", status, quotationId, page, size);
 
-        // 1. 상태 필터링
+        // 1. 상태 및 견적 필터링
         Page<MrpRun> mrpRunPage;
-        if (status == null || "ALL".equalsIgnoreCase(status)) {
+        if (quotationId != null && !quotationId.isEmpty()) {
+            // quotationId로 필터링
+            List<MrpRun> filtered = mrpRunRepository.findByQuotationId(quotationId);
+
+            // status 추가 필터링
+            if (status != null && !"ALL".equalsIgnoreCase(status)) {
+                filtered = filtered.stream()
+                    .filter(run -> status.equals(run.getStatus()))
+                    .toList();
+            }
+
+            // 페이징 처리
+            int start = page * size;
+            int end = Math.min(start + size, filtered.size());
+            List<MrpRun> pagedContent = start < filtered.size() ? filtered.subList(start, end) : new ArrayList<>();
+            mrpRunPage = new org.springframework.data.domain.PageImpl<>(
+                pagedContent,
+                PageRequest.of(page, size),
+                filtered.size()
+            );
+        } else if (status == null || "ALL".equalsIgnoreCase(status)) {
             mrpRunPage = mrpRunRepository.findAll(PageRequest.of(page, size));
         } else {
             mrpRunPage = mrpRunRepository.findByStatus(status, PageRequest.of(page, size));
@@ -114,6 +136,7 @@ public class MrpServiceImpl implements MrpService {
             // 제품 정보 조회
             Product product = productRepository.findById(mrpRun.getProductId()).orElse(null);
             String itemName = product != null ? product.getProductName() : "알 수 없는 제품";
+            String itemId = product != null ?product.getId() : "없는 제품";
 
             // 견적 번호 조회
             String quotationNumber = null;
@@ -126,6 +149,7 @@ public class MrpServiceImpl implements MrpService {
 
             MrpRunQueryResponseDto.MrpRunItemDto itemDto = MrpRunQueryResponseDto.MrpRunItemDto.builder()
                     .mrpRunId(mrpRun.getId())
+                    .itemId(itemId)
                     .quotationNumber(quotationNumber)
                     .itemName(itemName)
                     .quantity(mrpRun.getQuantity())
@@ -153,81 +177,32 @@ public class MrpServiceImpl implements MrpService {
     }
 
     @Override
-    @Transactional
-    public void approveMrpRun(String mrpRunId) {
-        log.info("MRP 계획주문 승인: mrpRunId={}", mrpRunId);
+    @Transactional(readOnly = true)
+    public List<org.ever._4ever_be_scm.scm.mm.dto.ToggleCodeLabelDto> getMrpRunQuotationList() {
+        log.info("MRP Run 견적 목록 조회");
 
-        MrpRun mrpRun = mrpRunRepository.findById(mrpRunId)
-                .orElseThrow(() -> new RuntimeException("MRP_RUN을 찾을 수 없습니다: " + mrpRunId));
+        // 1. MRP Run에 존재하는 모든 quotationId 조회 (중복 제거)
+        List<String> quotationIds = mrpRunRepository.findAll().stream()
+            .map(MrpRun::getQuotationId)
+            .distinct()
+            .toList();
 
-        if (!"PENDING".equals(mrpRun.getStatus())) {
-            throw new RuntimeException("PENDING 상태의 계획주문만 승인할 수 있습니다. 현재 상태: " + mrpRun.getStatus());
+        // 2. 각 quotationId에 대해 quotationNumber 조회
+        List<org.ever._4ever_be_scm.scm.mm.dto.ToggleCodeLabelDto> result = new ArrayList<>();
+        for (String quotationId : quotationIds) {
+            String quotationNumber = quotationId;
+            try {
+                BusinessQuotationDto quotation = businessQuotationServicePort.getQuotationById(quotationId);
+                if (quotation != null && quotation.getQuotationNumber() != null) {
+                    quotationNumber = quotation.getQuotationNumber();
+                }
+            } catch (Exception e) {
+                log.warn("견적 정보 조회 실패: quotationId={}", quotationId);
+            }
+
+            result.add(new org.ever._4ever_be_scm.scm.mm.dto.ToggleCodeLabelDto(quotationNumber, quotationId));
         }
 
-        mrpRun.setStatus("APPROVAL");
-        mrpRunRepository.save(mrpRun);
-
-        log.info("MRP 계획주문 승인 완료: mrpRunId={}, status=APPROVAL", mrpRunId);
-    }
-
-    @Override
-    @Transactional
-    public void rejectMrpRun(String mrpRunId) {
-        log.info("MRP 계획주문 거부: mrpRunId={}", mrpRunId);
-
-        MrpRun mrpRun = mrpRunRepository.findById(mrpRunId)
-                .orElseThrow(() -> new RuntimeException("MRP_RUN을 찾을 수 없습니다: " + mrpRunId));
-
-        if (!"PENDING".equals(mrpRun.getStatus())) {
-            throw new RuntimeException("PENDING 상태의 계획주문만 거부할 수 있습니다. 현재 상태: " + mrpRun.getStatus());
-        }
-
-        mrpRun.setStatus("REJECTED");
-        mrpRunRepository.save(mrpRun);
-
-        log.info("MRP 계획주문 거부 완료: mrpRunId={}, status=REJECTED", mrpRunId);
-    }
-
-    @Override
-    @Transactional
-    public void receiveMrpRun(String mrpRunId) {
-        log.info("MRP 계획주문 입고 처리: mrpRunId={}", mrpRunId);
-
-        MrpRun mrpRun = mrpRunRepository.findById(mrpRunId)
-                .orElseThrow(() -> new RuntimeException("MRP_RUN을 찾을 수 없습니다: " + mrpRunId));
-
-        if (!"APPROVAL".equals(mrpRun.getStatus())) {
-            throw new RuntimeException("APPROVAL 상태의 계획주문만 입고할 수 있습니다. 현재 상태: " + mrpRun.getStatus());
-        }
-
-        // 1. MRP_RUN 상태를 COMPLETED로 변경
-        mrpRun.setStatus("COMPLETED");
-        mrpRunRepository.save(mrpRun);
-
-        // 2. 재고 자동 증가
-        String productId = mrpRun.getProductId();
-        BigDecimal quantity = mrpRun.getQuantity();
-
-        ProductStock stock = productStockRepository.findByProductId(productId).orElse(null);
-
-        if (stock == null) {
-            // ProductStock이 없으면 생성 (기본 창고에)
-            log.warn("ProductStock이 없습니다. 새로 생성합니다: productId={}", productId);
-
-            throw new RuntimeException("재고가 없는 제품입니다.");
-        } else {
-            // 재고에 증가
-            BigDecimal currentAvailable = stock.getAvailableCount() != null
-                    ? stock.getAvailableCount()
-                    : BigDecimal.ZERO;
-
-            stock.setAvailableCount(currentAvailable.add(quantity));
-            productStockRepository.save(stock);
-
-            log.info("재고 증가 완료: productId={}, 이전={}, 증가={}, 현재={}",
-                    productId, currentAvailable, quantity, stock.getAvailableCount());
-        }
-
-        log.info("MRP 계획주문 입고 완료: mrpRunId={}, status=COMPLETED", mrpRunId);
+        return result;
     }
 }
