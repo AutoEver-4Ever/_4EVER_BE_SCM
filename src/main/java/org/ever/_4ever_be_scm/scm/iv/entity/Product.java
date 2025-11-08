@@ -1,11 +1,11 @@
 package org.ever._4ever_be_scm.scm.iv.entity;
 
 import com.github.f4b6a3.uuid.UuidCreator;
-import lombok.*;
-import org.ever._4ever_be_scm.common.entity.TimeStamp;
-
 import jakarta.persistence.*;
 import java.math.BigDecimal;
+
+import lombok.*;
+import org.ever._4ever_be_scm.common.entity.TimeStamp;
 
 @NoArgsConstructor
 @AllArgsConstructor
@@ -63,5 +63,16 @@ public class Product extends TimeStamp {
         if (id == null) {
             id = String.valueOf(UuidCreator.getTimeOrderedEpoch());  // UUID v7 생성
         }
+        if (productCode == null || productCode.isBlank()) {
+            productCode = generateMaterialCodeFromId();
+        }
+    }
+
+    private String generateMaterialCodeFromId() {
+        String normalizedId = id.replace("-", "");
+        String suffix = normalizedId.length() > 7
+                ? normalizedId.substring(normalizedId.length() - 7)
+                : normalizedId;
+        return "MAT-" + suffix.toUpperCase();
     }
 }
