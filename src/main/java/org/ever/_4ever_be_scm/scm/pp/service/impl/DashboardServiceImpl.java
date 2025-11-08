@@ -32,6 +32,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.IntStream;
 
 @Slf4j
 @Service
@@ -65,12 +67,11 @@ public class DashboardServiceImpl implements DashboardService {
 
         // supplier_user에서 user_id로 supplier_user table의 id 조회
         SupplierUser supplierUser = supplierUserRepository.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("해당 userId와 일치하는 사용자가 없습니다."));
-        String supplierUserId = supplierUser.getId();
+                .orElseThrow(() -> new IllegalArgumentException("해당 userId와 일치하는 공급사 사용자를 찾을 수 없습니다."));
 
-        // supplier_company의 supplier_user_id를 조회하여 공급사의 이름(supplier_company_name)을 조회
-        SupplierCompany supplierCompany = supplierCompanyRepository.findByCompanyName(supplierUserId)
-                .orElseThrow(() -> new IllegalArgumentException("해당 공급사의 담당자와 연결된 공급사가 없습니다."));
+        // supplier_company의 supplier_user_id를 통해 공급사 엔티티 조회
+        SupplierCompany supplierCompany = supplierCompanyRepository.findBySupplierUser(supplierUser)
+                .orElseThrow(() -> new IllegalArgumentException("해당 공급사 사용자와 연결된 공급사가 없습니다."));
         String supplierCompanyName = supplierCompany.getCompanyName();
         log.info("[INFO][SUP] 조회한 공급사의 이름: {}", supplierCompanyName);
 
@@ -87,6 +88,11 @@ public class DashboardServiceImpl implements DashboardService {
                 .stream()
                 .limit(limit)
                 .toList();
+
+        if (orders.isEmpty()) {
+            log.info("[DASHBOARD][MOCK][SUPPLIER][PO] 실데이터 없음 - 목업 발주서 반환, userId: {}", userId);
+            return buildMockSupplierPurchaseOrders(limit, supplierCompanyName, productTitle);
+        }
 
         return orders.stream()
                 .map(order -> DashboardWorkflowItemDto.builder()
@@ -122,12 +128,19 @@ public class DashboardServiceImpl implements DashboardService {
     public List<DashboardWorkflowItemDto> getPurchaseRequestsOverall(int size) {
         int limit = normalizeSize(size);
 
-        return productRequestRepository
+        var requests = productRequestRepository
                 .findAllByOrderByCreatedAtDesc()
                 .stream()
                 .limit(limit)
                 .map(this::toPurchaseRequestItem)
                 .toList();
+
+        if (requests.isEmpty()) {
+            log.info("[DASHBOARD][MOCK][MM][PO] 실데이터 없음 - 전체 구매요청 목업 데이터 반환");
+            return buildMockPurchaseRequests(limit);
+        }
+
+        return requests;
     }
 
     @Override
@@ -135,7 +148,7 @@ public class DashboardServiceImpl implements DashboardService {
     public List<DashboardWorkflowItemDto> getMmPurchaseOrders(int size) {
         int limit = normalizeSize(size);
 
-        return productOrderRepository
+        var orders = productOrderRepository
                 .findAllByOrderByCreatedAtDesc()
                 .stream()
                 .limit(limit)
@@ -148,6 +161,13 @@ public class DashboardServiceImpl implements DashboardService {
                         .date(formatDate(order.getCreatedAt()))
                         .build())
                 .toList();
+
+        if (orders.isEmpty()) {
+            log.info("[DASHBOARD][MOCK][MM][SO] 실데이터 없음 - 전체 발주서 목업 데이터 반환");
+            return buildMockPurchaseOrders(limit);
+        }
+
+        return orders;
     }
 
     @Override
@@ -160,6 +180,11 @@ public class DashboardServiceImpl implements DashboardService {
                 .stream()
                 .limit(limit)
                 .toList();
+
+        if (inboundLogs.isEmpty()) {
+            log.info("[DASHBOARD][MOCK][IM][IN] 실데이터 없음 - 입고 목업 데이터 반환");
+            return buildMockStockLogs(limit, MOVEMENT_TYPE_INBOUND);
+        }
 
         return inboundLogs.stream()
                 .map(this::toStockLogItem)
@@ -177,6 +202,11 @@ public class DashboardServiceImpl implements DashboardService {
                 .limit(limit)
                 .toList();
 
+        if (outboundLogs.isEmpty()) {
+            log.info("[DASHBOARD][MOCK][IM][OUT] 실데이터 없음 - 출고 목업 데이터 반환");
+            return buildMockStockLogs(limit, MOVEMENT_TYPE_OUTBOUND);
+        }
+
         return outboundLogs.stream()
                 .map(this::toStockLogItem)
                 .toList();
@@ -190,9 +220,16 @@ public class DashboardServiceImpl implements DashboardService {
         BusinessQuotationListResponseDto response =
                 businessQuotationServicePort.getQuotationList("APPROVAL", LocalDate.now().minusMonths(1), LocalDate.now(), 0, limit);
 
-        return response.getContent().stream()
+        List<DashboardWorkflowItemDto> items = response.getContent().stream()
                 .map(this::toQuotationItem)
                 .toList();
+
+        if (items.isEmpty()) {
+            log.info("[DASHBOARD][MOCK][PP][QT] 실데이터 없음 - 생산 전환 견적 목업 데이터 반환");
+            return buildMockProductionQuotations(limit);
+        }
+
+        return items;
     }
 
     @Override
@@ -200,11 +237,18 @@ public class DashboardServiceImpl implements DashboardService {
     public List<DashboardWorkflowItemDto> getProductionInProgress(String userId, int size) {
         int limit = normalizeSize(size);
 
-        return mesRepository.findByStatusOrderByCreatedAtDesc("IN_PROGRESS")
+        List<DashboardWorkflowItemDto> items = mesRepository.findByStatusOrderByCreatedAtDesc("IN_PROGRESS")
                 .stream()
                 .limit(limit)
                 .map(this::toMesItem)
                 .toList();
+
+        if (items.isEmpty()) {
+            log.info("[DASHBOARD][MOCK][PP][MES] 실데이터 없음 - MES 작업 목업 데이터 반환");
+            return buildMockMesJobs(limit);
+        }
+
+        return items;
     }
 
     private DashboardWorkflowItemDto toPurchaseRequestItem(ProductRequest request) {
@@ -295,6 +339,99 @@ public class DashboardServiceImpl implements DashboardService {
                 .statusCode(Optional.ofNullable(mes.getStatus()).orElse("IN_PROGRESS"))
                 .date(startDateTime != null ? startDateTime.format(ISO_FORMATTER) : null)
                 .build();
+    }
+
+    private List<DashboardWorkflowItemDto> buildMockPurchaseRequests(int size) {
+        int itemCount = Math.min(size > 0 ? size : DEFAULT_SIZE, DEFAULT_SIZE);
+
+        return IntStream.range(0, itemCount)
+                .mapToObj(i -> DashboardWorkflowItemDto.builder()
+                        .itemId(UUID.randomUUID().toString())
+                        .itemTitle("긴급 구매요청 " + (i + 1))
+                        .itemNumber(String.format("REQ-MOCK-%04d", i + 1))
+                        .name("요청자 " + (i + 1))
+                        .statusCode(i % 2 == 0 ? "REQUESTED" : "APPROVED")
+                        .date(LocalDate.now().minusDays(i).toString())
+                        .build())
+                .toList();
+    }
+
+    private List<DashboardWorkflowItemDto> buildMockPurchaseOrders(int size) {
+        int itemCount = Math.min(size > 0 ? size : DEFAULT_SIZE, DEFAULT_SIZE);
+
+        return IntStream.range(0, itemCount)
+                .mapToObj(i -> DashboardWorkflowItemDto.builder()
+                        .itemId(UUID.randomUUID().toString())
+                        .itemTitle("예비부품 발주 " + (i + 1))
+                        .itemNumber(String.format("PO-MOCK-%04d", i + 1))
+                        .name("담당자 " + (i + 1))
+                        .statusCode(i % 2 == 0 ? "APPROVED" : "IN_PROGRESS")
+                        .date(LocalDate.now().minusDays(i).toString())
+                        .build())
+                .toList();
+    }
+
+    private List<DashboardWorkflowItemDto> buildMockSupplierPurchaseOrders(int size, String supplierCompanyName, String productTitle) {
+        int itemCount = Math.min(size > 0 ? size : DEFAULT_SIZE, DEFAULT_SIZE);
+        String titleBase = (productTitle != null ? productTitle : "공급사 제품") + " 발주";
+        String nameBase = supplierCompanyName != null ? supplierCompanyName : "공급사 담당자";
+
+        return IntStream.range(0, itemCount)
+                .mapToObj(i -> DashboardWorkflowItemDto.builder()
+                        .itemId(UUID.randomUUID().toString())
+                        .itemTitle(titleBase)
+                        .itemNumber(String.format("PO-MOCK-%04d", i + 1))
+                        .name(nameBase)
+                        .statusCode(i % 2 == 0 ? "REQUESTED" : "APPROVED")
+                        .date(LocalDate.now().minusDays(i).toString())
+                        .build())
+                .toList();
+    }
+
+    private List<DashboardWorkflowItemDto> buildMockStockLogs(int size, String movementType) {
+        int itemCount = Math.min(size > 0 ? size : DEFAULT_SIZE, DEFAULT_SIZE);
+        boolean inbound = MOVEMENT_TYPE_INBOUND.equals(movementType);
+
+        return IntStream.range(0, itemCount)
+                .mapToObj(i -> DashboardWorkflowItemDto.builder()
+                        .itemId(UUID.randomUUID().toString())
+                        .itemTitle(String.format("창고 A · %s", inbound ? "입고" : "출고"))
+                        .itemNumber(String.format("%s-MOCK-%04d", inbound ? "IN" : "OUT", i + 1))
+                        .name("재고 담당자 " + (i + 1))
+                        .statusCode(inbound ? "COMPLETED" : (i % 2 == 0 ? "IN_PROGRESS" : "COMPLETED"))
+                        .date(LocalDate.now().minusDays(i).toString())
+                        .build())
+                .toList();
+    }
+
+    private List<DashboardWorkflowItemDto> buildMockProductionQuotations(int size) {
+        int itemCount = Math.min(size > 0 ? size : DEFAULT_SIZE, DEFAULT_SIZE);
+
+        return IntStream.range(0, itemCount)
+                .mapToObj(i -> DashboardWorkflowItemDto.builder()
+                        .itemId(UUID.randomUUID().toString())
+                        .itemTitle("생산 전환 견적 목업 " + (i + 1))
+                        .itemNumber(String.format("QT-MOCK-%04d", i + 1))
+                        .name("생산 담당자 " + (i + 1))
+                        .statusCode(i % 2 == 0 ? "APPROVED" : "PENDING")
+                        .date(LocalDate.now().minusDays(i).toString())
+                        .build())
+                .toList();
+    }
+
+    private List<DashboardWorkflowItemDto> buildMockMesJobs(int size) {
+        int itemCount = Math.min(size > 0 ? size : DEFAULT_SIZE, DEFAULT_SIZE);
+
+        return IntStream.range(0, itemCount)
+                .mapToObj(i -> DashboardWorkflowItemDto.builder()
+                        .itemId(UUID.randomUUID().toString())
+                        .itemTitle("MES 작업 목업 " + (i + 1))
+                        .itemNumber(String.format("MES-MOCK-%04d", i + 1))
+                        .name("라인 " + (i + 1))
+                        .statusCode(i % 2 == 0 ? "IN_PROGRESS" : "READY")
+                        .date(LocalDate.now().minusDays(i).toString())
+                        .build())
+                .toList();
     }
 
     private int normalizeSize(int size) {
