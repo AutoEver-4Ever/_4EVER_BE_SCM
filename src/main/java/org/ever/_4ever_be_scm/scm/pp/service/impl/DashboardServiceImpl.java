@@ -218,7 +218,7 @@ public class DashboardServiceImpl implements DashboardService {
         int limit = normalizeSize(size);
 
         BusinessQuotationListResponseDto response =
-                businessQuotationServicePort.getQuotationList("APPROVAL", LocalDate.now().minusMonths(1), LocalDate.now(), 0, limit);
+                businessQuotationServicePort.getQuotationList("APPROVAL", null, LocalDate.now().minusMonths(1), LocalDate.now(), 0, limit);
 
         List<DashboardWorkflowItemDto> items = response.getContent().stream()
                 .map(this::toQuotationItem)
