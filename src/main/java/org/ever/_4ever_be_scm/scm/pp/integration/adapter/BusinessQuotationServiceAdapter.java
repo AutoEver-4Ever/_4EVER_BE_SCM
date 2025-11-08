@@ -27,7 +27,8 @@ public class BusinessQuotationServiceAdapter implements BusinessQuotationService
 
     @Override
     public BusinessQuotationListResponseDto getQuotationList(
-            String statusCode, 
+            String statusCode,
+            String availableStatus,
             LocalDate startDate, 
             LocalDate endDate, 
             int page, 
@@ -41,6 +42,7 @@ public class BusinessQuotationServiceAdapter implements BusinessQuotationService
             UriComponentsBuilder uriBuilder = UriComponentsBuilder
                     .fromUriString(businessServiceUrl + "/business/sd/scm/quotations")
                     .queryParam("statusCode", statusCode != null ? statusCode : "ALL")
+                    .queryParam("availableStatus", availableStatus != null ? availableStatus : "ALL")
                     .queryParam("page", page)
                     .queryParam("size", size);
             

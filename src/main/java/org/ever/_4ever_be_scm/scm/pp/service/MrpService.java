@@ -1,7 +1,10 @@
 package org.ever._4ever_be_scm.scm.pp.service;
 
+import org.ever._4ever_be_scm.scm.mm.dto.ToggleCodeLabelDto;
 import org.ever._4ever_be_scm.scm.pp.dto.MrpRunConvertRequestDto;
 import org.ever._4ever_be_scm.scm.pp.dto.MrpRunQueryResponseDto;
+
+import java.util.List;
 
 public interface MrpService {
 
@@ -13,20 +16,10 @@ public interface MrpService {
     /**
      * MRP 계획주문 목록 조회
      */
-    MrpRunQueryResponseDto getMrpRunList(String status, int page, int size);
+    MrpRunQueryResponseDto getMrpRunList(String status, String quotationId, int page, int size);
 
     /**
-     * MRP 계획주문 승인
+     * MRP Run 견적 목록 조회 (Toggle용)
      */
-    void approveMrpRun(String mrpRunId);
-
-    /**
-     * MRP 계획주문 거부
-     */
-    void rejectMrpRun(String mrpRunId);
-
-    /**
-     * MRP 계획주문 입고 처리
-     */
-    void receiveMrpRun(String mrpRunId);
+    List<ToggleCodeLabelDto> getMrpRunQuotationList();
 }

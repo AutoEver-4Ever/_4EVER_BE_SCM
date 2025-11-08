@@ -6,14 +6,14 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 판매주문 상태 변경 완료 이벤트 (Business -> SCM)
- * Business에서 상태 변경 완료 후 SCM에 결과 통보
+ * 구매 주문 승인 완료 이벤트 (Business -> SCM)
+ * Business에서 PurchaseVoucher 생성 완료 후 SCM에 결과 통보
  */
 @Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class SalesOrderStatusChangeCompletionEvent {
+public class PurchaseOrderApprovalCompletionEvent {
 
     /**
      * 트랜잭션 ID (SAGA 패턴)
@@ -21,9 +21,9 @@ public class SalesOrderStatusChangeCompletionEvent {
     private String transactionId;
 
     /**
-     * 판매 주문 ID
+     * 구매 주문 ID (ProductOrder ID)
      */
-    private String salesOrderId;
+    private String purchaseOrderId;
 
     /**
      * 성공 여부

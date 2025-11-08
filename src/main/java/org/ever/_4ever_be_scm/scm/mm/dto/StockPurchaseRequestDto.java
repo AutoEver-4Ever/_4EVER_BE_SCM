@@ -13,5 +13,6 @@ public class StockPurchaseRequestDto {
     public static class Item {
         private String productId;
         private BigDecimal quantity;
+        private String mrpRunId;  // MRP Run에서 온 경우만 포함 (nullable)
     }
 }

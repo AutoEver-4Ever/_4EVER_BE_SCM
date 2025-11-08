@@ -39,6 +39,10 @@ public class KafkaTopicConfig {
     public static final String SUPPLIER_COMPANY_RESOLVE_REQUEST_TOPIC = "supplier-company-resolve-request";
     public static final String SUPPLIER_COMPANY_RESOLVE_RESULT_TOPIC = "supplier-company-resolve-result";
 
+    // MM 모듈 - 구매주문 승인 토픽
+    public static final String PURCHASE_ORDER_APPROVAL_TOPIC = "purchase-order-approval";
+    public static final String PURCHASE_ORDER_APPROVAL_COMPLETION_TOPIC = "purchase-order-approval-completion";
+
     @Bean
     public NewTopic scmStockReserveTopic() {
         return TopicBuilder.name(SCM_STOCK_RESERVE_TOPIC)
@@ -202,6 +206,22 @@ public class KafkaTopicConfig {
     @Bean
     public NewTopic supplierCompanyResolveResultTopic() {
         return TopicBuilder.name(SUPPLIER_COMPANY_RESOLVE_RESULT_TOPIC)
+            .partitions(3)
+            .replicas(1)
+            .build();
+    }
+
+    @Bean
+    public NewTopic purchaseOrderApprovalTopic() {
+        return TopicBuilder.name(PURCHASE_ORDER_APPROVAL_TOPIC)
+            .partitions(3)
+            .replicas(1)
+            .build();
+    }
+
+    @Bean
+    public NewTopic purchaseOrderApprovalCompletionTopic() {
+        return TopicBuilder.name(PURCHASE_ORDER_APPROVAL_COMPLETION_TOPIC)
             .partitions(3)
             .replicas(1)
             .build();

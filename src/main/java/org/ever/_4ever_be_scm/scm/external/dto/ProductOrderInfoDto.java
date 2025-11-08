@@ -9,5 +9,6 @@ import java.math.BigDecimal;
 @Builder
 public class ProductOrderInfoDto {
     private String productOrderId;
+    private String productOrderNumber;
     private BigDecimal totalAmount;
 }

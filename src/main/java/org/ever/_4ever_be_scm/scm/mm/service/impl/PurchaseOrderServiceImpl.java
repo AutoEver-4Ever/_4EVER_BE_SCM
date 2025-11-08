@@ -1,6 +1,9 @@
 package org.ever._4ever_be_scm.scm.mm.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.ever._4ever_be_scm.common.response.ApiResponse;
+import org.ever._4ever_be_scm.infrastructure.kafka.config.KafkaTopicConfig;
 import org.ever._4ever_be_scm.scm.iv.entity.Product;
 import org.ever._4ever_be_scm.scm.iv.entity.SupplierCompany;
 import org.ever._4ever_be_scm.scm.iv.entity.SupplierUser;
@@ -15,26 +18,38 @@ import org.ever._4ever_be_scm.scm.mm.repository.ProductOrderItemRepository;
 import org.ever._4ever_be_scm.scm.mm.repository.ProductOrderRepository;
 import org.ever._4ever_be_scm.scm.mm.service.PurchaseOrderService;
 import org.ever._4ever_be_scm.scm.mm.vo.PurchaseOrderSearchVo;
+import org.ever.event.PurchaseOrderApprovalEvent;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.async.DeferredResult;
 
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PurchaseOrderServiceImpl implements PurchaseOrderService {
-    
+
     private final ProductOrderRepository productOrderRepository;
     private final ProductOrderItemRepository productOrderItemRepository;
     private final ProductRepository productRepository;
     private final ProductOrderApprovalRepository productOrderApprovalRepository;
+    private final org.ever._4ever_be_scm.scm.pp.repository.MrpRunRepository mrpRunRepository;
+    private final org.ever._4ever_be_scm.scm.pp.repository.MrpRepository mrpRepository;
+    private final org.ever._4ever_be_scm.scm.iv.repository.ProductStockRepository productStockRepository;
+    private final org.ever._4ever_be_scm.scm.mm.repository.ProductOrderShipmentRepository productOrderShipmentRepository;
+    private final org.ever._4ever_be_scm.infrastructure.kafka.producer.KafkaProducerService kafkaProducerService;
+    private final org.ever._4ever_be_scm.common.async.GenericAsyncResultManager<Void> asyncResultManager;
 
     @Override
     @Transactional(readOnly = true)  
@@ -231,22 +246,94 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     @Override
     @Transactional
-    public void approvePurchaseOrder(String purchaseOrderId, String requesterId) {
-        ProductOrder productOrder = productOrderRepository.findById(purchaseOrderId)
-                .orElseThrow(() -> new RuntimeException("발주서를 찾을 수 없습니다: " + purchaseOrderId));
-        
-        ProductOrderApproval approval = productOrder.getApprovalId();
-        if (approval == null) {
-            throw new RuntimeException("승인 정보가 없습니다.");
+    public DeferredResult<ResponseEntity<ApiResponse<Void>>> approvePurchaseOrderAsync(String purchaseOrderId, String requesterId) {
+        log.info("구매주문 승인 시작 - purchaseOrderId: {}, requesterId: {}", purchaseOrderId, requesterId);
+
+        // DeferredResult 생성 (타임아웃 30초)
+        DeferredResult<ResponseEntity<ApiResponse<Void>>> deferredResult = new DeferredResult<>(30000L);
+
+        // 타임아웃 처리
+        deferredResult.onTimeout(() -> {
+            deferredResult.setResult(ResponseEntity
+                    .status(HttpStatus.REQUEST_TIMEOUT)
+                    .body(ApiResponse.fail("처리 시간이 초과되었습니다.", HttpStatus.REQUEST_TIMEOUT)));
+        });
+
+        try {
+            // 1. ProductOrder 조회
+            ProductOrder productOrder = productOrderRepository.findById(purchaseOrderId)
+                    .orElseThrow(() -> new RuntimeException("발주서를 찾을 수 없습니다: " + purchaseOrderId));
+
+            ProductOrderApproval approval = productOrder.getApprovalId();
+            if (approval == null) {
+                throw new RuntimeException("승인 정보가 없습니다.");
+            }
+
+            // 2. 승인 상태 업데이트
+            ProductOrderApproval updatedApproval = approval.toBuilder()
+                    .approvalStatus("APPROVAL")
+                    .approvedAt(LocalDateTime.now())
+                    .approvedBy(requesterId)
+                    .build();
+
+            productOrderApprovalRepository.save(updatedApproval);
+
+            // 3. MRP Run 상태 업데이트 (mrpRunId가 있는 경우만)
+            List<ProductOrderItem> items = productOrderItemRepository.findByProductOrderId(purchaseOrderId);
+            for (ProductOrderItem item : items) {
+                if (item.getMrpRunId() != null) {
+                    org.ever._4ever_be_scm.scm.pp.entity.MrpRun mrpRun = mrpRunRepository.findById(item.getMrpRunId())
+                        .orElseThrow(() -> new RuntimeException("MRP Run을 찾을 수 없습니다: " + item.getMrpRunId()));
+                    mrpRun.setStatus("ORDER_APPROVED");  // 발주서 승인됨
+                    mrpRunRepository.save(mrpRun);
+                }
+            }
+
+            // 4. Supplier Company ID 추출
+            String supplierCompanyId = null;
+            if (!items.isEmpty()) {
+                ProductOrderItem firstItem = items.get(0);
+                Product product = productRepository.findById(firstItem.getProductId()).orElse(null);
+                if (product != null && product.getSupplierCompany() != null) {
+                    supplierCompanyId = product.getSupplierCompany().getId();
+                }
+            }
+
+            if (supplierCompanyId == null) {
+                throw new RuntimeException("공급업체 정보를 찾을 수 없습니다.");
+            }
+
+            // 5. 트랜잭션 ID 생성 및 DeferredResult 등록
+            String transactionId = UUID.randomUUID().toString();
+            asyncResultManager.registerResult(transactionId, deferredResult);
+
+            // 6. PurchaseOrderApprovalEvent 발행
+            PurchaseOrderApprovalEvent event = PurchaseOrderApprovalEvent.builder()
+                    .transactionId(transactionId)
+                    .purchaseOrderId(productOrder.getId())
+                    .purchaseOrderNumber(productOrder.getProductOrderCode())
+                    .supplierCompanyId(supplierCompanyId)
+                    .totalAmount(productOrder.getTotalPrice())
+                    .dueDate(productOrder.getDueDate())
+                    .memo(productOrder.getEtc())
+                    .timestamp(System.currentTimeMillis())
+                    .build();
+
+            kafkaProducerService.sendToTopic(
+                    KafkaTopicConfig.PURCHASE_ORDER_APPROVAL_TOPIC,
+                    purchaseOrderId, event);
+
+            log.info("구매주문 승인 이벤트 발행 완료 - transactionId: {}, purchaseOrderId: {}",
+                    transactionId, purchaseOrderId);
+
+        } catch (Exception e) {
+            log.error("구매주문 승인 실패 - purchaseOrderId: {}, error: {}", purchaseOrderId, e.getMessage(), e);
+            deferredResult.setResult(ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.fail("구매주문 승인 실패: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR)));
         }
 
-        ProductOrderApproval updatedApproval = approval.toBuilder()
-                .approvalStatus("APPROVAL")
-                .approvedAt(LocalDateTime.now())
-                .approvedBy(requesterId)
-                .build();
-
-        productOrderApprovalRepository.save(updatedApproval);
+        return deferredResult;
     }
 
     @Override
@@ -269,5 +356,106 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .build();
 
         productOrderApprovalRepository.save(updatedApproval);
+    }
+
+    @Override
+    @Transactional
+    public void startDelivery(String purchaseOrderId) {
+        ProductOrder productOrder = productOrderRepository.findById(purchaseOrderId)
+                .orElseThrow(() -> new RuntimeException("발주서를 찾을 수 없습니다: " + purchaseOrderId));
+
+        // 1. Shipment 생성
+        org.ever._4ever_be_scm.scm.mm.entity.ProductOrderShipment shipment =
+                org.ever._4ever_be_scm.scm.mm.entity.ProductOrderShipment.builder()
+                .status("DELIVERING")  // 배송중
+                .expectedDelivery(productOrder.getDueDate() != null ? productOrder.getDueDate().toLocalDate() : null)
+                .build();
+
+        productOrderShipmentRepository.save(shipment);
+
+        productOrder.setShipmentId(shipment);
+        productOrderRepository.save(productOrder);
+
+        // 2. MRP Run 상태 업데이트 (mrpRunId가 있는 경우만)
+        List<ProductOrderItem> items = productOrderItemRepository.findByProductOrderId(purchaseOrderId);
+        for (ProductOrderItem item : items) {
+            if (item.getMrpRunId() != null) {
+                org.ever._4ever_be_scm.scm.pp.entity.MrpRun mrpRun = mrpRunRepository.findById(item.getMrpRunId())
+                    .orElseThrow(() -> new RuntimeException("MRP Run을 찾을 수 없습니다: " + item.getMrpRunId()));
+                mrpRun.setStatus("DELIVERING");  // 배송중
+                mrpRunRepository.save(mrpRun);
+            }
+        }
+    }
+
+    @Override
+    @Transactional
+    public void completeDelivery(String purchaseOrderId) {
+        ProductOrder productOrder = productOrderRepository.findById(purchaseOrderId)
+                .orElseThrow(() -> new RuntimeException("발주서를 찾을 수 없습니다: " + purchaseOrderId));
+
+        // 1. Shipment 업데이트
+        if (productOrder.getShipmentId() == null) {
+            throw new RuntimeException("배송 정보가 없습니다.");
+        }
+
+        org.ever._4ever_be_scm.scm.mm.entity.ProductOrderShipment shipment = productOrder.getShipmentId();
+        shipment.setStatus("DELIVERED");
+        shipment.setDeliveredAt(java.time.LocalDate.now());
+        productOrderShipmentRepository.save(shipment);
+
+        // 2. 재고 증가 및 MRP Run 상태 업데이트
+        List<ProductOrderItem> items = productOrderItemRepository.findByProductOrderId(purchaseOrderId);
+        for (ProductOrderItem item : items) {
+            // 2-1. 재고 증가
+            Product product = productRepository.findById(item.getProductId())
+                .orElseThrow(() -> new RuntimeException("제품을 찾을 수 없습니다: " + item.getProductId()));
+
+            org.ever._4ever_be_scm.scm.iv.entity.ProductStock stock = productStockRepository
+                .findByProductId(item.getProductId())
+                .orElse(org.ever._4ever_be_scm.scm.iv.entity.ProductStock.builder()
+                    .product(product)
+                    .availableCount(java.math.BigDecimal.ZERO)
+                    .reservedCount(java.math.BigDecimal.ZERO)
+                    .safetyCount(java.math.BigDecimal.ZERO)
+                    .build());
+
+            // 2-2. MRP Run 상태 업데이트 및 재고 예약 처리 (mrpRunId가 있는 경우만)
+            if (item.getMrpRunId() != null) {
+                // MRP Run 상태 업데이트
+                org.ever._4ever_be_scm.scm.pp.entity.MrpRun mrpRun = mrpRunRepository.findById(item.getMrpRunId())
+                    .orElseThrow(() -> new RuntimeException("MRP Run을 찾을 수 없습니다: " + item.getMrpRunId()));
+                mrpRun.setStatus("DELIVERED");
+                mrpRunRepository.save(mrpRun);
+
+                // MRP 기반 구매: availableCount와 reservedCount 모두 증가
+                // 이렇게 하면 해당 견적을 위해 자동으로 예약되어 다른 견적이 사용할 수 없음
+                stock.setAvailableCount(stock.getAvailableCount().add(item.getCount()));
+                stock.reserveStock(item.getCount());  // reservedCount도 증가
+                productStockRepository.save(stock);
+
+                // MRP 상태 업데이트: 현재 MRP Run이 부족량을 충족하는지 확인
+                if (mrpRun.getMrpId() != null) {
+                    org.ever._4ever_be_scm.scm.pp.entity.Mrp mrp = mrpRepository.findById(mrpRun.getMrpId())
+                        .orElse(null);
+
+                    if (mrp != null) {
+                        java.math.BigDecimal shortage = mrp.getShortageQuantity() != null
+                            ? mrp.getShortageQuantity() : java.math.BigDecimal.ZERO;
+
+                        // 현재 MRP Run의 입고량이 부족량 이상이면 SUFFICIENT로 변경
+                        if (mrpRun.getQuantity().compareTo(shortage) >= 0) {
+                            mrp.setStatus("SUFFICIENT");
+                            mrp.setShortageQuantity(java.math.BigDecimal.ZERO);  // 부족량 해소
+                            mrpRepository.save(mrp);
+                        }
+                    }
+                }
+            } else {
+                // 일반 구매 (MRP 아님): availableCount만 증가
+                stock.setAvailableCount(stock.getAvailableCount().add(item.getCount()));
+                productStockRepository.save(stock);
+            }
+        }
     }
 }

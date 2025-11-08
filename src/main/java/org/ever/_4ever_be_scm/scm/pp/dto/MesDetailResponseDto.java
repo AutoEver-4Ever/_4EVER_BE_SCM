@@ -26,6 +26,10 @@ public class MesDetailResponseDto {
     private String currentOperation;
     private List<OperationDto> operations;
 
+    // 버튼 활성화 제어
+    private Boolean canStartMes;      // MES 시작 버튼 활성화 여부
+    private Boolean canCompleteMes;   // MES 완료 버튼 활성화 여부
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
@@ -40,6 +44,7 @@ public class MesDetailResponseDto {
     @AllArgsConstructor
     @Builder
     public static class OperationDto {
+        private String mesOperationLogId;  // MesOperationLog의 ID (공정 시작/종료 시 사용)
         private String operationNumber;
         private String operationName;
         private Integer sequence;
@@ -48,6 +53,10 @@ public class MesDetailResponseDto {
         private String finishedAt;
         private Double durationHours;
         private ManagerDto manager;
+
+        // 버튼 활성화 제어
+        private Boolean canStart;      // 공정 시작 버튼 활성화 여부
+        private Boolean canComplete;   // 공정 완료 버튼 활성화 여부
     }
 
     @Data

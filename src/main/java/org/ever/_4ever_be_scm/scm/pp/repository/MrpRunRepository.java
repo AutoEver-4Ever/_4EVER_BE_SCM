@@ -12,4 +12,10 @@ public interface MrpRunRepository extends JpaRepository<MrpRun, String> {
     List<MrpRun> findByProductId(String productId);
     List<MrpRun> findByProductIdAndStatus(String productId, String status);
     Page<MrpRun> findByStatus(String status, Pageable pageable);
+    List<MrpRun> findByQuotationIdAndProductIdAndStatus(String quotationId, String productId, String status);
+
+    /**
+     * mrpId로 MRP Run 조회
+     */
+    List<MrpRun> findByMrpId(String mrpId);
 }

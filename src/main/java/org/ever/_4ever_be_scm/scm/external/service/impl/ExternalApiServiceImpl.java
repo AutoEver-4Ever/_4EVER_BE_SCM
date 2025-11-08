@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ExternalApiServiceImpl implements ExternalApiService {
-    
+
     private final ProductOrderRepository productOrderRepository;
     private final ProductRepository productRepository;
     private final ProductStockRepository productStockRepository;
@@ -67,6 +67,7 @@ public class ExternalApiServiceImpl implements ExternalApiService {
         return ProductOrderItemResponseDto.builder()
                 .items(items)
                 .totalPrice(productOrder.getTotalPrice()) // 전체 발주 금액
+                .productOrderNumber(productOrder.getProductOrderCode())
                 .build();
     }
 
@@ -81,11 +82,13 @@ public class ExternalApiServiceImpl implements ExternalApiService {
                     if (productOrder != null) {
                         return ProductOrderInfoDto.builder()
                                 .productOrderId(id)
+                                .productOrderNumber(productOrder.getProductOrderCode())
                                 .totalAmount(productOrder.getTotalPrice())
                                 .build();
                     }
                     return ProductOrderInfoDto.builder()
                             .productOrderId(id)
+                            .productOrderNumber("UNKNOWN")
                             .totalAmount(BigDecimal.ZERO)
                             .build();
                 })

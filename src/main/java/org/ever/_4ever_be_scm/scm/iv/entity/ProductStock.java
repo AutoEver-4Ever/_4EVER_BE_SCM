@@ -45,6 +45,7 @@ public class ProductStock extends TimeStamp {
 
 
     @Column(name = "for_shipment_count")
+    @Builder.Default
     private BigDecimal forShipmentCount = BigDecimal.ZERO;
 
     @PrePersist

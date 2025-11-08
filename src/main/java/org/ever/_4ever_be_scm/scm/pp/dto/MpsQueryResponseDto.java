@@ -14,7 +14,8 @@ import java.util.List;
 public class MpsQueryResponseDto {
     private String bomId;
     private String productName;
-    private List<WeekDto> weeks;
+    private List<WeekDto> content;
+    private PageInfo page;
 
     @Data
     @NoArgsConstructor

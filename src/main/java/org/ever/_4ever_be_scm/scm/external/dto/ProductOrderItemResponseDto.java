@@ -15,6 +15,7 @@ import java.util.List;
 public class ProductOrderItemResponseDto {
     private List<ItemDto> items;
     private BigDecimal totalPrice;
+    private String productOrderNumber;
 
     @Data
     @NoArgsConstructor

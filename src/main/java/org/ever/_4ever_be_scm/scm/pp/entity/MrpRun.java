@@ -56,7 +56,14 @@ public class MrpRun extends TimeStamp {
     private LocalDate expectedArrival;
 
     /**
-     * 상태: PENDING(승인대기), APPROVAL(승인완료/주문진행중), REJECTED(거부), COMPLETED(입고완료)
+     * 참조 MRP ID
+     */
+    @Column(name = "mrp_id")
+    private String mrpId;
+
+    /**
+     * 상태: INITIAL(초기), PENDING(구매요청 대기), REQUEST_APPROVED(구매요청 승인됨),
+     *      ORDER_APPROVED(발주서 승인됨), DELIVERING(배송중), DELIVERED(입고완료)
      */
     @Column(name = "status", length = 20)
     private String status;
