@@ -36,6 +36,8 @@ public class KafkaTopicConfig {
     // IV 모듈 - 판매주문 상태 변경 토픽
     public static final String SALES_ORDER_STATUS_CHANGE_TOPIC = "sales-order-status-change";
     public static final String SALES_ORDER_STATUS_CHANGE_COMPLETION_TOPIC = "sales-order-status-change-completion";
+    public static final String SUPPLIER_COMPANY_RESOLVE_REQUEST_TOPIC = "supplier-company-resolve-request";
+    public static final String SUPPLIER_COMPANY_RESOLVE_RESULT_TOPIC = "supplier-company-resolve-result";
 
     // MM 모듈 - 구매주문 승인 토픽
     public static final String PURCHASE_ORDER_APPROVAL_TOPIC = "purchase-order-approval";
@@ -188,6 +190,22 @@ public class KafkaTopicConfig {
     @Bean
     public NewTopic salesOrderStatusChangeCompletionTopic() {
         return TopicBuilder.name(SALES_ORDER_STATUS_CHANGE_COMPLETION_TOPIC)
+            .partitions(3)
+            .replicas(1)
+            .build();
+    }
+
+    @Bean
+    public NewTopic supplierCompanyResolveRequestTopic() {
+        return TopicBuilder.name(SUPPLIER_COMPANY_RESOLVE_REQUEST_TOPIC)
+            .partitions(3)
+            .replicas(1)
+            .build();
+    }
+
+    @Bean
+    public NewTopic supplierCompanyResolveResultTopic() {
+        return TopicBuilder.name(SUPPLIER_COMPANY_RESOLVE_RESULT_TOPIC)
             .partitions(3)
             .replicas(1)
             .build();
