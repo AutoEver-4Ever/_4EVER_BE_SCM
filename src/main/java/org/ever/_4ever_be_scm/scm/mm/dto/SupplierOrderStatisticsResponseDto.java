@@ -7,19 +7,18 @@ import java.math.BigDecimal;
 
 @Data
 @Builder
-public class MMStatisticsResponseDto {
+public class SupplierOrderStatisticsResponseDto {
     private PeriodStatistics week;
     private PeriodStatistics month;
     private PeriodStatistics quarter;
     private PeriodStatistics year;
-    
+
     @Data
     @Builder
     public static class PeriodStatistics {
-        private StatValue purchaseOrderAmount;
-        private StatValue purchaseRequestCount;
+        private StatValue orderCount;
     }
-    
+
     @Data
     @Builder
     public static class StatValue {

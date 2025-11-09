@@ -15,7 +15,7 @@ public class StatisticValueDto {
     /**
      * 값
      */
-    private Object value;
+    private Long value;
     
     /**
      * 변화율 (delta rate)

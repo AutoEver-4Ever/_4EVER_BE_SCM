@@ -753,6 +753,11 @@ public class MesServiceImpl implements MesService {
                     ? stock.getForShipmentCount()
                     : BigDecimal.ZERO;
 
+            BigDecimal availableCount = stock.getAvailableCount() != null
+                    ? stock.getAvailableCount()
+                    : BigDecimal.ZERO;
+
+            stock.setAvailableCount(availableCount.add(BigDecimal.valueOf(mes.getQuantity())));
             stock.setForShipmentCount(forShipmentCount.add(BigDecimal.valueOf(mes.getQuantity())));
             productStockRepository.save(stock);
 

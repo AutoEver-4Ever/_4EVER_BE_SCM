@@ -107,7 +107,9 @@ public class InventoryServiceImpl implements InventoryService {
                 .itemNumber(product.getProductCode())
                 .category(mapCategory(product.getCategory()))
                 // 재고 정보 (예약재고 반영)
-                .currentStock(productStock.getActualAvailableCount().intValue())
+                .currentStock(productStock.getAvailableCount().intValue())
+                .forShipmentStock(productStock.getForShipmentCount().intValue())
+                .reservedStock(productStock.getReservedCount().intValue())
                 .uomName(product.getUnit())
                 .unitPrice(product.getOriginPrice())
                 .totalAmount(productStock.getAvailableCount().multiply(product.getOriginPrice()))
@@ -120,7 +122,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .location(warehouse.getLocation())
                 .lastModified(latestLog != null ? latestLog.getCreatedAt() : null)
                 // 공급사 이름
-                .supplierCompanyName(supplierCompany.getCompanyName())
+                .supplierCompanyName(supplierCompany.getCompanyName() != null ? supplierCompany.getCompanyName() : "4Ever")
                 // 재고 이동 내역
                 .stockMovement(stockMovements)
                 .build();
@@ -173,7 +175,9 @@ public class InventoryServiceImpl implements InventoryService {
                 .itemNumber(product.getProductCode())
                 .itemName(product.getProductName())
                 .category(mapCategory(product.getCategory()))
-                .currentStock(productStock.getActualAvailableCount().intValue())
+                .currentStock(productStock.getAvailableCount().intValue())
+                .forShipmentStock(productStock.getForShipmentCount().intValue())
+                .reservedStock(productStock.getReservedCount().intValue())
                 .safetyStock(productStock.getSafetyCount().intValue())
                 .uomName(product.getUnit())
                 .unitPrice(product.getOriginPrice())

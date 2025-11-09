@@ -24,6 +24,8 @@ public class InventoryItemDetailDto {
 
     // 재고 정보
     private int currentStock;
+    private int reservedStock;
+    private int forShipmentStock;
     private String uomName;
     private BigDecimal unitPrice;
     private BigDecimal totalAmount;

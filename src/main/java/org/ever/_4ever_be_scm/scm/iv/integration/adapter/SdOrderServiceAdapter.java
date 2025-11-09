@@ -45,6 +45,45 @@ public class SdOrderServiceAdapter implements SdOrderServicePort {
     }
 
     @Override
+    public SdOrderListResponseDto getSalesOrderList(int page, int size, String status, String startDate, String endDate) {
+        log.info("SD 서비스 호출 - 판매 주문 목록 조회 (날짜 필터): page={}, size={}, status={}, startDate={}, endDate={}",
+                page, size, status, startDate, endDate);
+
+        try {
+            StringBuilder uriBuilder = new StringBuilder(sdServiceUrl + "/business/sd/orders?page=" + page + "&size=" + size);
+
+            if (status != null && !status.isEmpty()) {
+                uriBuilder.append("&status=").append(status);
+            }
+            if (startDate != null && !startDate.isEmpty()) {
+                uriBuilder.append("&startDate=").append(startDate);
+            }
+            if (endDate != null && !endDate.isEmpty()) {
+                uriBuilder.append("&endDate=").append(endDate);
+            }
+
+            String uri = uriBuilder.toString();
+            log.debug("호출 URI: {}", uri);
+
+            SdApiResponse<SdOrderListResponseDto> response = restClient.get()
+                    .uri(uri)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<SdApiResponse<SdOrderListResponseDto>>() {});
+
+            if (response != null && response.isSuccess()) {
+                log.info("SD 서비스 호출 성공 - 판매 주문 목록 조회 (날짜 필터)");
+                return response.getData();
+            } else {
+                log.error("SD 서비스 응답 실패 - response: {}", response);
+                throw new RuntimeException("Failed to retrieve sales order list from SD service");
+            }
+        } catch (Exception e) {
+            log.error("SD 서비스 호출 중 오류 발생", e);
+            throw new RuntimeException("Error calling SD service for sales order list", e);
+        }
+    }
+
+    @Override
     public SdOrderDetailResponseDto getSalesOrderDetail(String salesOrderId) {
         log.info("SD 서비스 호출 - 판매 주문 상세 조회: salesOrderId={}", salesOrderId);
 
