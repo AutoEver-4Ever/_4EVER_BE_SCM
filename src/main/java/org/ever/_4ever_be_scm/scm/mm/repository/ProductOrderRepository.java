@@ -53,4 +53,6 @@ public interface ProductOrderRepository extends JpaRepository<ProductOrder, Stri
     java.util.List<ProductOrder> findBySupplierCompanyNameOrderByCreatedAtDesc(String supplierCompanyName);
 
     java.util.List<ProductOrder> findAllByOrderByCreatedAtDesc();
+
+    long countBySupplierCompanyNameAndCreatedAtBetween(String supplierCompanyName, LocalDateTime startDate, LocalDateTime endDate);
 }

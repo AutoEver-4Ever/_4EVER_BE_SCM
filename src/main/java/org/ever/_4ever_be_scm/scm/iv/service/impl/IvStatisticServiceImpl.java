@@ -1,6 +1,7 @@
 package org.ever._4ever_be_scm.scm.iv.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.ever._4ever_be_scm.common.service.DateRangeCalculator;
 import org.ever._4ever_be_scm.scm.iv.dto.response.*;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductStockRepository;
@@ -22,11 +23,13 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@Slf4j
 public class IvStatisticServiceImpl implements IvStatisticService {
-    
+
     private final ProductStockRepository productStockRepository;
     private final WarehouseRepository warehouseRepository;
     private final ProductOrderRepository productOrderRepository;
+    private final org.ever._4ever_be_scm.scm.iv.integration.port.SdOrderServicePort sdOrderServicePort;
     
     /**
      * 재고 부족 통계 조회
@@ -110,59 +113,76 @@ public class IvStatisticServiceImpl implements IvStatisticService {
     // IM 통계 - 기간별
     private ImStatisticPeriodDto buildImStatistic(String period) {
         Map<String, LocalDate[]> ranges = DateRangeCalculator.getDateRanges();
-        
+
         String currentKey = getCurrentKey(period);
         String previousKey = getPreviousKey(period);
-        
+
         LocalDate[] currentRange = ranges.get(currentKey);
         LocalDate[] previousRange = ranges.get(previousKey);
-        
+
         if (currentRange == null || previousRange == null) {
             throw new IllegalStateException("기간 계산 실패: " + period);
         }
-        
-        // LocalDate → LocalDateTime 변환
-        LocalDateTime currentStart = currentRange[0].atStartOfDay();
+
+        // 처음부터 현재 기간 종료까지, 처음부터 이전 기간 종료까지 (총 재고 가치용)
+        // LocalDateTime.MIN은 PostgreSQL 범위를 벗어나므로 합리적인 과거 날짜 사용
+        LocalDateTime fromBeginning = LocalDateTime.of(2000, 1, 1, 0, 0, 0);
         LocalDateTime currentEnd = currentRange[1].atTime(LocalTime.MAX);
-        LocalDateTime previousStart = previousRange[0].atStartOfDay();
         LocalDateTime previousEnd = previousRange[1].atTime(LocalTime.MAX);
-        
+
+        // 특정 기간 (입고완료용)
+        LocalDateTime currentStart = currentRange[0].atStartOfDay();
+        LocalDateTime previousStart = previousRange[0].atStartOfDay();
+
         // 현재 기간 통계
-        BigDecimal currentTotalStock = productStockRepository.sumTotalStockValueByDateBetween(currentStart, currentEnd)
-                .orElse(BigDecimal.valueOf(0)); // 기본값
-        long currentReceivingCount = productOrderRepository.countByApprovalId_ApprovalStatusAndUpdatedAtBetween("RECEIVING", currentStart, currentEnd);
-        long currentReceivedCount = productOrderRepository.countByApprovalId_ApprovalStatusAndUpdatedAtBetween("RECEIVED", currentStart, currentEnd);
-        
+        // 총 재고 가치: 처음 ~ 현재까지 누적
+        BigDecimal currentTotalStock = productStockRepository.sumTotalStockValueByDateBetween(fromBeginning, currentEnd)
+                .orElse(BigDecimal.valueOf(0));
+        // 입고 완료: 특정 기간 동안 RECEIVED로 updatedAt된 건수
+        long currentReceivedCount = productOrderRepository.countByApprovalId_ApprovalStatusAndUpdatedAtBetween("DELIVERED", currentStart, currentEnd);
+
         // 이전 기간 통계
-        BigDecimal previousTotalStock = productStockRepository.sumTotalStockValueByDateBetween(previousStart, previousEnd)
-                .orElse(BigDecimal.valueOf(0)); // 기본값
-        long previousReceivingCount = productOrderRepository.countByApprovalId_ApprovalStatusAndUpdatedAtBetween("RECEIVING", previousStart, previousEnd);
-        long previousReceivedCount = productOrderRepository.countByApprovalId_ApprovalStatusAndUpdatedAtBetween("RECEIVED", previousStart, previousEnd);
-        
-        // 출고 데이터 (목업)
-        long[] deliveryData = getDeliveryMockData(period);
-        long[] previousDeliveryData = getPreviousDeliveryMockData(period);
-        
+        // 총 재고 가치: 처음 ~ 이전까지 누적
+        BigDecimal previousTotalStock = productStockRepository.sumTotalStockValueByDateBetween(fromBeginning, previousEnd)
+                .orElse(BigDecimal.valueOf(0));
+        // 입고 완료: 특정 기간 동안 RECEIVED로 updatedAt된 건수
+        long previousReceivedCount = productOrderRepository.countByApprovalId_ApprovalStatusAndUpdatedAtBetween("DELIVERED", previousStart, previousEnd);
+
+        // 출고 데이터 (SD 서비스에서 조회)
+        long currentDeliveredCount = 0;
+        long previousDeliveredCount = 0;
+
+        try {
+            // 현재 기간 출고 완료 (DELIVERED)
+            org.ever._4ever_be_scm.scm.iv.integration.dto.SdOrderListResponseDto currentDeliveredResponse =
+                    sdOrderServicePort.getSalesOrderList(0, Integer.MAX_VALUE, "DELIVERED",
+                            currentRange[0].toString(), currentRange[1].toString());
+            currentDeliveredCount = currentDeliveredResponse != null && currentDeliveredResponse.getPage() != null
+                    ? currentDeliveredResponse.getPage().getTotalElements() : 0;
+
+            // 이전 기간 출고 완료 (DELIVERED)
+            org.ever._4ever_be_scm.scm.iv.integration.dto.SdOrderListResponseDto previousDeliveredResponse =
+                    sdOrderServicePort.getSalesOrderList(0, Integer.MAX_VALUE, "DELIVERED",
+                            previousRange[0].toString(), previousRange[1].toString());
+            previousDeliveredCount = previousDeliveredResponse != null && previousDeliveredResponse.getPage() != null
+                    ? previousDeliveredResponse.getPage().getTotalElements() : 0;
+
+        } catch (Exception e) {
+            log.warn("SD 서비스 호출 실패, 기본값 사용: {}", e.getMessage());
+        }
+
         return ImStatisticPeriodDto.builder()
                 .total_stock(StatisticValueDto.builder()
                         .value(currentTotalStock.longValue())
                         .delta_rate(calculateDeltaRate(currentTotalStock.longValue(), previousTotalStock.longValue()))
-                        .build())
-                .store_pending(StatisticValueDto.builder()
-                        .value(currentReceivingCount)
-                        .delta_rate(calculateDeltaRate(currentReceivingCount, previousReceivingCount))
                         .build())
                 .store_complete(StatisticValueDto.builder()
                         .value(currentReceivedCount)
                         .delta_rate(calculateDeltaRate(currentReceivedCount, previousReceivedCount))
                         .build())
                 .delivery_complete(StatisticValueDto.builder()
-                        .value(deliveryData[0])
-                        .delta_rate(calculateDeltaRate(deliveryData[0], previousDeliveryData[0]))
-                        .build())
-                .delivery_pending(StatisticValueDto.builder()
-                        .value(deliveryData[1])
-                        .delta_rate(calculateDeltaRate(deliveryData[1], previousDeliveryData[1]))
+                        .value(currentDeliveredCount)
+                        .delta_rate(calculateDeltaRate(currentDeliveredCount, previousDeliveredCount))
                         .build())
                 .build();
     }
@@ -170,40 +190,34 @@ public class IvStatisticServiceImpl implements IvStatisticService {
     // 창고 통계 - 기간별
     private WarehouseStatisticPeriodDto buildWarehouseStatistic(String period) {
         Map<String, LocalDate[]> ranges = DateRangeCalculator.getDateRanges();
-        
+
         String currentKey = getCurrentKey(period);
         String previousKey = getPreviousKey(period);
-        
+
         LocalDate[] currentRange = ranges.get(currentKey);
         LocalDate[] previousRange = ranges.get(previousKey);
-        
+
         if (currentRange == null || previousRange == null) {
             throw new IllegalStateException("기간 계산 실패: " + period);
         }
-        
-        // LocalDate → LocalDateTime 변환
-        LocalDateTime currentStart = currentRange[0].atStartOfDay();
-        LocalDateTime currentEnd = currentRange[1].atTime(LocalTime.MAX);
-        LocalDateTime previousStart = previousRange[0].atStartOfDay();
-        LocalDateTime previousEnd = previousRange[1].atTime(LocalTime.MAX);
-        
-        // 현재 기간 통계
-        long currentTotalCount = warehouseRepository.countByCreatedAtBetween(currentStart, currentEnd);
-        long currentActiveCount = warehouseRepository.countByStatusAndCreatedAtBetween("ACTIVE", currentStart, currentEnd);
-        
-        // 이전 기간 통계
-        long previousTotalCount = warehouseRepository.countByCreatedAtBetween(previousStart, previousEnd);
-        long previousActiveCount = warehouseRepository.countByStatusAndCreatedAtBetween("ACTIVE", previousStart, previousEnd);
 
-        // 기본값 설정 (현재 총 창고 수 사용)
-        if (currentTotalCount == 0) currentTotalCount = warehouseRepository.count();
-        if (currentActiveCount == 0) currentActiveCount = warehouseRepository.countByStatus("ACTIVE");
-        if (previousTotalCount == 0) previousTotalCount = currentTotalCount - 1;
-        if (previousActiveCount == 0) previousActiveCount = currentActiveCount - 1;
-        
+        // 처음부터 현재 기간 종료까지, 처음부터 이전 기간 종료까지
+        // LocalDateTime.MIN은 PostgreSQL 범위를 벗어나므로 합리적인 과거 날짜 사용
+        LocalDateTime fromBeginning = LocalDateTime.of(2000, 1, 1, 0, 0, 0);
+        LocalDateTime currentEnd = currentRange[1].atTime(LocalTime.MAX);
+        LocalDateTime previousEnd = previousRange[1].atTime(LocalTime.MAX);
+
+        // 현재 기간 통계 (처음 ~ 현재까지 누적)
+        long currentTotalCount = warehouseRepository.countByCreatedAtBetween(fromBeginning, currentEnd);
+        long currentActiveCount = warehouseRepository.countByStatusAndCreatedAtBetween("ACTIVE", fromBeginning, currentEnd);
+
+        // 이전 기간 통계 (처음 ~ 이전까지 누적)
+        long previousTotalCount = warehouseRepository.countByCreatedAtBetween(fromBeginning, previousEnd);
+        long previousActiveCount = warehouseRepository.countByStatusAndCreatedAtBetween("ACTIVE", fromBeginning, previousEnd);
+
         return WarehouseStatisticPeriodDto.builder()
                 .total_warehouse(StatisticValueDto.builder()
-                        .value(String.valueOf(currentTotalCount))
+                        .value(currentTotalCount)
                         .delta_rate(calculateDeltaRate(currentTotalCount, previousTotalCount))
                         .build())
                 .in_operation_warehouse(StatisticValueDto.builder()
@@ -236,27 +250,6 @@ public class IvStatisticServiceImpl implements IvStatisticService {
     
     private BigDecimal calculateDeltaRate(long current, long previous) {
         if (previous == 0) return BigDecimal.ZERO;
-        return BigDecimal.valueOf((double) (current - previous) / previous);
-    }
-    
-    // 출고 목업 데이터 (외부 서버 연동 예정)
-    private long[] getDeliveryMockData(String period) {
-        switch (period) {
-            case "WEEK": return new long[]{89L, 14L}; // [출고완료, 출고준비완료]
-            case "MONTH": return new long[]{374L, 57L};
-            case "QUARTER": return new long[]{1118L, 171L};
-            case "YEAR": return new long[]{4572L, 682L};
-            default: return new long[]{0L, 0L};
-        }
-    }
-    
-    private long[] getPreviousDeliveryMockData(String period) {
-        switch (period) {
-            case "WEEK": return new long[]{83L, 15L}; // 이전 기간 목업
-            case "MONTH": return new long[]{350L, 58L};
-            case "QUARTER": return new long[]{1065L, 175L};
-            case "YEAR": return new long[]{4388L, 695L};
-            default: return new long[]{0L, 0L};
-        }
+        return BigDecimal.valueOf(current - previous);
     }
 }

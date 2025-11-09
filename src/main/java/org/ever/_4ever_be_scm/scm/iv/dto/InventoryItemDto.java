@@ -50,7 +50,11 @@ public class InventoryItemDto {
      * 재고 수량
      */
     private Integer currentStock;
-    
+
+    private Integer forShipmentStock;
+
+    private Integer reservedStock;
+
     /**
      * 단위
      */

@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.ever._4ever_be_scm.common.response.ApiResponse;
 import org.ever._4ever_be_scm.scm.mm.dto.MMStatisticsResponseDto;
+import org.ever._4ever_be_scm.scm.mm.dto.SupplierOrderStatisticsResponseDto;
 import org.ever._4ever_be_scm.scm.mm.dto.ToggleCodeLabelDto;
 import java.util.List;
 import org.ever._4ever_be_scm.scm.mm.service.MMStatisticsService;
@@ -104,5 +105,24 @@ public class MMStatisticsController {
                 new ToggleCodeLabelDto("공급 업체 번호", "SupplierCompanyName")
         );
         return ApiResponse.success(list, "카테고리 목록 조회 성공", org.springframework.http.HttpStatus.OK);
+    }
+
+    /**
+     * 공급업체별 주문 통계 조회
+     */
+    @GetMapping("/supplier/orders/statistics")
+    @io.swagger.v3.oas.annotations.Operation(
+            summary = "공급업체별 주문 통계 조회",
+            description = "공급업체 사용자 ID를 기준으로 해당 공급업체의 주문 통계를 조회합니다. 주, 월, 분기, 년 단위로 제공됩니다."
+    )
+    public ResponseEntity<ApiResponse<SupplierOrderStatisticsResponseDto>> getSupplierOrderStatistics(
+            @RequestParam String userId) {
+        try {
+            SupplierOrderStatisticsResponseDto statistics = mmStatisticsService.getSupplierOrderStatistics(userId);
+            return ResponseEntity.ok(ApiResponse.success(statistics, "공급업체 주문 통계 조회 성공", HttpStatus.OK));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.fail("공급업체 주문 통계 조회 실패: " + e.getMessage(), HttpStatus.BAD_REQUEST));
+        }
     }
 }
