@@ -79,10 +79,10 @@ public class StockPurchaseServiceImpl implements StockPurchaseService {
             .productId(product.getId())
             .unit(product.getUnit())
             .count(it.getQuantity())
-            .unit(product.getUnit())
             .price(product.getOriginPrice())
             .preferredDeliveryDate(LocalDateTime.now().plusSeconds(
                 supplierCompany.getDeliveryDays() != null ? supplierCompany.getDeliveryDays().getSeconds() : 4L * 86_400))
+            .mrpRunId(it.getMrpRunId())
             .build();
         productRequestItemRepository.save(requestItem);
 
