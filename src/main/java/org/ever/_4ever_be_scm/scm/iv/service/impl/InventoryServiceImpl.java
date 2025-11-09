@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static org.ever._4ever_be_scm.common.exception.ErrorCode.PRODUCT_NOT_FOUND;
@@ -90,7 +91,13 @@ public class InventoryServiceImpl implements InventoryService {
 
         Product product = productStock.getProduct();
         Warehouse warehouse = productStock.getWarehouse();
-        SupplierCompany supplierCompany = product.getSupplierCompany();
+
+        SupplierCompany supplierCompany =
+                (product != null) ? product.getSupplierCompany() : null;
+
+        String companyName = Optional.ofNullable(supplierCompany)
+                .map(SupplierCompany::getCompanyName)
+                .orElse("4Ever");
 
         // 이 제품의 재고 이동 내역 조회
         List<ProductStockLog> stockLogs = productStockLogRepository.findByProductId(product.getId());
@@ -122,7 +129,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .location(warehouse.getLocation())
                 .lastModified(latestLog != null ? latestLog.getCreatedAt() : null)
                 // 공급사 이름
-                .supplierCompanyName(supplierCompany.getCompanyName() != null ? supplierCompany.getCompanyName() : "4Ever")
+                .supplierCompanyName(companyName)
                 // 재고 이동 내역
                 .stockMovement(stockMovements)
                 .build();

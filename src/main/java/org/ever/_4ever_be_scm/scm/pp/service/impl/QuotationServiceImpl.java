@@ -733,7 +733,7 @@ public class QuotationServiceImpl implements QuotationService {
 
         String productId = item.getItemId();
         Integer requestQuantity = item.getQuantity();
-        LocalDate requestDueDate = LocalDate.parse(businessQuotation.getDueDate());
+        LocalDate requestDueDate =LocalDate.now();
         LocalDate today = LocalDate.now();
 
         log.info("아이템 확정 처리: productId={}, 요청수량={}, 요청납기={}", productId, requestQuantity, requestDueDate);
