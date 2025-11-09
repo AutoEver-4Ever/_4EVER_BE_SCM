@@ -199,7 +199,7 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
                 .purchaseRequisitionNumber(productRequest.getProductRequestCode())
                 .requesterId(productRequest.getRequesterId())
                 .requesterName(userInfo.getName())
-                .departmentId(userInfo.getDepartmentId()) // Mock 데이터
+                .departmentId(userInfo.getDepartmentId())
                 .departmentName(userInfo.getDepartmentName())
                 .requestDate(productRequest.getCreatedAt())
                 .statusCode(statusCode)

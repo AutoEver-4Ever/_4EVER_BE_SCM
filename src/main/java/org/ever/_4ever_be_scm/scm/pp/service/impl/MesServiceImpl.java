@@ -8,6 +8,8 @@ import org.ever._4ever_be_scm.scm.iv.entity.Product;
 import org.ever._4ever_be_scm.scm.iv.entity.ProductStock;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductStockRepository;
+import org.ever._4ever_be_scm.scm.mm.integration.dto.InternalUserResponseDto;
+import org.ever._4ever_be_scm.scm.mm.integration.port.InternalUserServicePort;
 import org.ever._4ever_be_scm.scm.pp.dto.MesDetailResponseDto;
 import org.ever._4ever_be_scm.scm.pp.dto.MesQueryResponseDto;
 import org.ever._4ever_be_scm.scm.pp.entity.*;
@@ -51,6 +53,7 @@ public class MesServiceImpl implements MesService {
     private final BusinessQuotationServicePort businessQuotationServicePort;
     private final org.ever._4ever_be_scm.infrastructure.kafka.producer.KafkaProducerService kafkaProducerService;
     private final org.ever._4ever_be_scm.common.async.GenericAsyncResultManager<Void> asyncResultManager;
+    private final InternalUserServicePort internalUserServicePort;
 
     @Override
     @Transactional(readOnly = true)
@@ -172,14 +175,15 @@ public class MesServiceImpl implements MesService {
             String finishedAt = log.getFinishedAt() != null ?
                     log.getFinishedAt().format(timeFormatter) : null;
 
-            // 매니저 정보 (주석 처리 - 추후 개발)
-            // MesDetailResponseDto.ManagerDto manager = null;
-            // if (log.getManagerId() != null) {
-            //     manager = MesDetailResponseDto.ManagerDto.builder()
-            //             .id(log.getManagerId())
-            //             .name("매니저명")
-            //             .build();
-            // }
+//             매니저 정보 (주석 처리 - 추후 개발)
+             MesDetailResponseDto.ManagerDto manager = null;
+             if (log.getManagerId() != null) {
+                 InternalUserResponseDto internalUser = internalUserServicePort.getInternalUserInfoById(log.getManagerId());
+                 manager = MesDetailResponseDto.ManagerDto.builder()
+                         .id(log.getManagerId())
+                         .name(internalUser.getName())
+                         .build();
+             }
 
             MesDetailResponseDto.OperationDto operationDto = MesDetailResponseDto.OperationDto.builder()
                     .mesOperationLogId(log.getId())  // MesOperationLog의 ID 반환
@@ -190,7 +194,7 @@ public class MesServiceImpl implements MesService {
                     .startedAt(startedAt)
                     .finishedAt(finishedAt)
                     .durationHours(log.getDurationHours())
-                    .manager(null)  // 주석 처리
+                    .manager(manager)  // 주석 처리
                     .build();
 
             operations.add(operationDto);
