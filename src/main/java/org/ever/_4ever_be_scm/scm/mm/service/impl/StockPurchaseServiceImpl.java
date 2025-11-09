@@ -101,6 +101,10 @@ public class StockPurchaseServiceImpl implements StockPurchaseService {
         }
     }
 
+    // 4. 계산된 totalPrice를 ProductRequest에 설정
+    productRequest.setTotalPrice(totalPrice);
+    productRequestRepository.save(productRequest);
+
     return productRequest.getId();
     }
 }
