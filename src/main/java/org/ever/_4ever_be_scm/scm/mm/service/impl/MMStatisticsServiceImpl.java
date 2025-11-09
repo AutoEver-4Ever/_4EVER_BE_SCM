@@ -108,8 +108,7 @@ public class MMStatisticsServiceImpl implements MMStatisticsService {
     }
 
     private BigDecimal calculateDeltaRate(long current, long previous) {
-        if (previous == 0) return BigDecimal.ZERO;
-        return BigDecimal.valueOf((double) (current - previous) / previous);
+        return BigDecimal.valueOf((double) (current - previous));
     }
 
     @Override
