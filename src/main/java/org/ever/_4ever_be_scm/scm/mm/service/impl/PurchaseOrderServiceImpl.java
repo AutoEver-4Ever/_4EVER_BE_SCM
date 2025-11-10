@@ -162,6 +162,106 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<PurchaseOrderListResponseDto> getPurchaseOrderListBySupplier(String userId, PurchaseOrderSearchVo searchVo) {
+        // 1. userId로 SupplierCompany 조회
+        SupplierCompany supplierCompany = supplierCompanyRepository.findBySupplierUser_UserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 사용자의 공급업체 정보를 찾을 수 없습니다."));
+
+        PageRequest pageRequest = PageRequest.of(searchVo.getPage(), searchVo.getSize());
+
+        // 날짜 범위 설정
+        final LocalDateTime startDateTime = searchVo.getStartDate() != null
+                ? searchVo.getStartDate().atStartOfDay()
+                : null;
+        final LocalDateTime endDateTime = searchVo.getEndDate() != null
+                ? searchVo.getEndDate().atTime(LocalTime.MAX)
+                : null;
+
+        // 2. 모든 발주서 조회 후 필터링
+        List<ProductOrder> allOrders = productOrderRepository.findAll();
+        List<ProductOrder> filteredOrders = allOrders.stream()
+                .filter(order -> {
+                    // 2-1. 해당 공급업체의 제품만 필터링
+                    List<ProductOrderItem> items = productOrderItemRepository.findByProductOrderId(order.getId());
+                    if (items.isEmpty()) return false;
+
+                    // 첫 번째 아이템의 제품이 해당 공급업체 소속인지 확인
+                    ProductOrderItem first = items.get(0);
+                    Product product = productRepository.findById(first.getProductId()).orElse(null);
+                    if (product == null || product.getSupplierCompany() == null) return false;
+                    if (!product.getSupplierCompany().getId().equals(supplierCompany.getId())) return false;
+
+                    // 2-2. statusCode 필터링
+                    String statusCode = searchVo.getStatusCode();
+                    if (statusCode != null && !"ALL".equalsIgnoreCase(statusCode)) {
+                        String orderStatusCode = order.getApprovalId() != null
+                            ? order.getApprovalId().getApprovalStatus()
+                            : "PENDING";
+                        if (orderStatusCode == null) {
+                            orderStatusCode = "PENDING";
+                        }
+                        if (!statusCode.equalsIgnoreCase(orderStatusCode)) {
+                            return false;
+                        }
+                    }
+
+                    // 2-3. keyword 필터링 (PurchaseOrderNumber만 가능)
+                    String keyword = searchVo.getKeyword();
+                    if (keyword != null && !keyword.isEmpty()) {
+                        if (order.getProductOrderCode() == null || !order.getProductOrderCode().toLowerCase().contains(keyword.toLowerCase())) {
+                            return false;
+                        }
+                    }
+
+                    // 2-4. 날짜 범위 필터링
+                    if (startDateTime != null && order.getCreatedAt().isBefore(startDateTime)) {
+                        return false;
+                    }
+                    if (endDateTime != null && order.getCreatedAt().isAfter(endDateTime)) {
+                        return false;
+                    }
+                    return true;
+                })
+                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                .toList();
+
+        // 3. 페이징 처리
+        int start = pageRequest.getPageNumber() * pageRequest.getPageSize();
+        int end = Math.min(start + pageRequest.getPageSize(), filteredOrders.size());
+        List<ProductOrder> pagedOrders = filteredOrders.subList(start, end);
+
+        List<PurchaseOrderListResponseDto> dtoList = new ArrayList<>();
+        for (ProductOrder productOrder : pagedOrders) {
+            // 발주서 아이템 조회하여 요약 생성
+            List<ProductOrderItem> items = productOrderItemRepository.findByProductOrderId(productOrder.getId());
+            String itemsSummary = generateItemsSummary(items);
+
+            // 승인 상태 조회
+            String statusCodeValue = productOrder.getApprovalId().getApprovalStatus();
+            if (statusCodeValue == null) {
+                statusCodeValue = "PENDING";
+            }
+
+            // supplierName: 해당 공급업체 이름 사용
+            String supplierName = supplierCompany.getCompanyName();
+
+            dtoList.add(PurchaseOrderListResponseDto.builder()
+                    .purchaseOrderId(productOrder.getId())
+                    .purchaseOrderNumber(productOrder.getProductOrderCode())
+                    .supplierName(supplierName)
+                    .itemsSummary(itemsSummary)
+                    .orderDate(productOrder.getCreatedAt())
+                    .dueDate(productOrder.getDueDate())
+                    .totalAmount(productOrder.getTotalPrice())
+                    .statusCode(statusCodeValue)
+                    .build());
+        }
+
+        return new PageImpl<>(dtoList, pageRequest, filteredOrders.size());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public PurchaseOrderDetailResponseDto getPurchaseOrderDetail(String purchaseOrderId) {
         ProductOrder productOrder = productOrderRepository.findById(purchaseOrderId)
                 .orElseThrow(() -> new IllegalArgumentException("발주서를 찾을 수 없습니다."));

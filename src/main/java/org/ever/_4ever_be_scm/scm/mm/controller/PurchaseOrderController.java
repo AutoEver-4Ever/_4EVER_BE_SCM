@@ -54,6 +54,31 @@ public class PurchaseOrderController {
         return ResponseEntity.ok(ApiResponse.success(response, "발주서 목록 조회에 성공했습니다.", HttpStatus.OK));
     }
 
+    @GetMapping("/supplier/{userId}")
+    public ResponseEntity<ApiResponse<PagedResponseDto<PurchaseOrderListResponseDto>>> getPurchaseOrderListBySupplier(
+            @PathVariable String userId,
+            @RequestParam(defaultValue = "ALL") String statusCode,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        PurchaseOrderSearchVo searchVo = PurchaseOrderSearchVo.builder()
+                .statusCode(statusCode)
+                .keyword(keyword)
+                .startDate(startDate)
+                .endDate(endDate)
+                .page(page)
+                .size(size)
+                .build();
+
+        Page<PurchaseOrderListResponseDto> purchaseOrders = purchaseOrderService.getPurchaseOrderListBySupplier(userId, searchVo);
+        PagedResponseDto<PurchaseOrderListResponseDto> response = PagedResponseDto.from(purchaseOrders);
+
+        return ResponseEntity.ok(ApiResponse.success(response, "공급업체 발주서 목록 조회에 성공했습니다.", HttpStatus.OK));
+    }
+
     @GetMapping("/{purchaseOrderId}")
     public ResponseEntity<ApiResponse<PurchaseOrderDetailResponseDto>> getPurchaseOrderDetail(
             @PathVariable String purchaseOrderId) {
