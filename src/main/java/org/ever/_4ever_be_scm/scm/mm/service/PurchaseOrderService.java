@@ -11,6 +11,8 @@ import org.springframework.web.context.request.async.DeferredResult;
 public interface PurchaseOrderService {
     Page<PurchaseOrderListResponseDto> getPurchaseOrderList(PurchaseOrderSearchVo searchVo);
 
+    Page<PurchaseOrderListResponseDto> getPurchaseOrderListBySupplier(String userId, PurchaseOrderSearchVo searchVo);
+
     PurchaseOrderDetailResponseDto getPurchaseOrderDetail(String purchaseOrderId);
 
     /**

@@ -71,8 +71,8 @@ public class MMStatisticsController {
     @GetMapping("/purchase-orders/search-type/toggle")
     public ApiResponse<List<ToggleCodeLabelDto>> getPurchaseOrderSearchTypeToggle() {
         List<ToggleCodeLabelDto> list = List.of(
-                new ToggleCodeLabelDto("공급 업체명", "SupplierCompanyName"),
-                new ToggleCodeLabelDto("발주서 번호", "PurchaseOrderNumber")
+                new ToggleCodeLabelDto("발주서 번호", "PurchaseOrderNumber"),
+                new ToggleCodeLabelDto("공급 업체명", "SupplierCompanyName")
         );
         return ApiResponse.success(list, "카테고리 목록 조회 성공", org.springframework.http.HttpStatus.OK);
     }

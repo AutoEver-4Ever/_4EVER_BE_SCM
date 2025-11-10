@@ -115,6 +115,20 @@ public class WarehouseServiceImpl implements WarehouseService {
     @Override
     @Transactional
     public void createWarehouse(WarehouseCreateRequestDto request) {
+        // 필수값 검증 (note 제외)
+        if (!StringUtils.hasText(request.getWarehouseName())) {
+            throw new IllegalArgumentException("창고명은 필수입니다.");
+        }
+        if (!StringUtils.hasText(request.getWarehouseType())) {
+            throw new IllegalArgumentException("창고 타입은 필수입니다.");
+        }
+        if (!StringUtils.hasText(request.getLocation())) {
+            throw new IllegalArgumentException("위치는 필수입니다.");
+        }
+        if (!StringUtils.hasText(request.getManagerId())) {
+            throw new IllegalArgumentException("담당자 ID는 필수입니다.");
+        }
+
         // 창고 코드 자동 생성 (WH + 타임스탬프)
         String uuid = UUID.randomUUID().toString().replace("-", "");
         String warehouseCode = "WH-" + uuid.substring(uuid.length() - 6);
