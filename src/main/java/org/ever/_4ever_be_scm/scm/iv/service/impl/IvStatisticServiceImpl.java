@@ -249,7 +249,6 @@ public class IvStatisticServiceImpl implements IvStatisticService {
     }
     
     private BigDecimal calculateDeltaRate(long current, long previous) {
-        if (previous == 0) return BigDecimal.ZERO;
         return BigDecimal.valueOf(current - previous);
     }
 }

@@ -114,8 +114,10 @@ public class SalesOrderController {
     )
     public DeferredResult<ResponseEntity<ApiResponse<Void>>> changeSalesOrderStatus(
             @PathVariable String salesOrderId,
-            @RequestBody SalesOrderStatusChangeRequestDto requestDto) {
+            @RequestBody SalesOrderStatusChangeRequestDto requestDto,
+            @RequestParam String requesterId
+    ) {
 
-        return salesOrderService.changeSalesOrderStatusAsync(salesOrderId, requestDto);
+        return salesOrderService.changeSalesOrderStatusAsync(salesOrderId, requestDto,requesterId);
     }
 }

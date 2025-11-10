@@ -50,6 +50,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private final org.ever._4ever_be_scm.scm.mm.repository.ProductOrderShipmentRepository productOrderShipmentRepository;
     private final org.ever._4ever_be_scm.infrastructure.kafka.producer.KafkaProducerService kafkaProducerService;
     private final org.ever._4ever_be_scm.common.async.GenericAsyncResultManager<Void> asyncResultManager;
+    private final org.ever._4ever_be_scm.scm.iv.service.StockTransferService stockTransferService;
 
     @Override
     @Transactional(readOnly = true)  
@@ -428,9 +429,19 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 mrpRun.setStatus("DELIVERED");
                 mrpRunRepository.save(mrpRun);
 
+                //TODO 입출고처리로 변경완료
                 // MRP 기반 구매: availableCount와 reservedCount 모두 증가
                 // 이렇게 하면 해당 견적을 위해 자동으로 예약되어 다른 견적이 사용할 수 없음
-                stock.setAvailableCount(stock.getAvailableCount().add(item.getCount()));
+                stockTransferService.processStockDelivery(
+                        item.getProductId(),
+                        item.getCount(),
+                        "system", // requesterId
+                        productOrder.getProductOrderCode(), // referenceCode
+                        "발주서 입고 (MRP)" // reason
+                );
+                // 재고 다시 조회 후 예약 처리
+                stock = productStockRepository.findByProductId(item.getProductId())
+                        .orElseThrow(() -> new RuntimeException("재고를 찾을 수 없습니다."));
                 stock.reserveStock(item.getCount());  // reservedCount도 증가
                 productStockRepository.save(stock);
 
@@ -452,9 +463,15 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                     }
                 }
             } else {
+                //TODO 입출고처리로 변경완료
                 // 일반 구매 (MRP 아님): availableCount만 증가
-                stock.setAvailableCount(stock.getAvailableCount().add(item.getCount()));
-                productStockRepository.save(stock);
+                stockTransferService.processStockDelivery(
+                        item.getProductId(),
+                        item.getCount(),
+                        "system", // requesterId
+                        productOrder.getProductOrderCode(), // referenceCode
+                        "발주서 입고 (일반)" // reason
+                );
             }
         }
     }

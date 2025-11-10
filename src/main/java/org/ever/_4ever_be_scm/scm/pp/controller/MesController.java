@@ -76,9 +76,11 @@ public class MesController {
     )
     public DeferredResult<ResponseEntity<ApiResponse<Void>>> startMes(
             @io.swagger.v3.oas.annotations.Parameter(description = "MES ID")
-            @PathVariable String mesId) {
+            @PathVariable String mesId,
+            @RequestParam String requesterId
+            ) {
 
-        return mesService.startMesAsync(mesId);
+        return mesService.startMesAsync(mesId, requesterId);
     }
 
     /**
@@ -131,9 +133,11 @@ public class MesController {
     )
     public DeferredResult<ResponseEntity<ApiResponse<Void>>> completeMes(
             @io.swagger.v3.oas.annotations.Parameter(description = "MES ID")
-            @PathVariable String mesId) {
+            @PathVariable String mesId,
+            @RequestParam String requesterId
+            ) {
 
-        return mesService.completeMesAsync(mesId);
+        return mesService.completeMesAsync(mesId, requesterId);
     }
 
     @GetMapping("/status/toggle")

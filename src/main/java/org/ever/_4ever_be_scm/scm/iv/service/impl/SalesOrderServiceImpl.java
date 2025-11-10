@@ -42,6 +42,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     private final org.ever._4ever_be_scm.infrastructure.kafka.producer.KafkaProducerService kafkaProducerService;
     private final org.ever._4ever_be_scm.common.async.GenericAsyncResultManager<Void> asyncResultManager;
     private final ProductStockRepository productStockRepository;
+    private final org.ever._4ever_be_scm.scm.iv.service.StockTransferService stockTransferService;
 
     /**
      * 생산중 판매 주문 목록 조회 (IN_PRODUCTION 상태)
@@ -179,7 +180,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     @Override
     @Transactional
     public DeferredResult<ResponseEntity<ApiResponse<Void>>> changeSalesOrderStatusAsync(
-            String salesOrderId, SalesOrderStatusChangeRequestDto requestDto) {
+            String salesOrderId, SalesOrderStatusChangeRequestDto requestDto,String requesterId) {
 
         // DeferredResult 생성 (타임아웃 30초)
         DeferredResult<ResponseEntity<ApiResponse<Void>>> deferredResult =
@@ -219,18 +220,32 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                     log.info("재고 차감 시작 - productId={}, quantity={}, reserved={}, forShipment={}",
                             item.getItemId(), quantity, currentReserved, currentForShipment);
 
-                    // 3-1. 먼저 예약 재고에서 차감
+                    //TODO 입출고처리로 변경 완료
+                    // 1. 출고 처리
+                    stockTransferService.processStockDelivery(
+                            item.getItemId(),
+                            quantity.negate(), // 음수로 변환 (출고)
+                            requesterId, // requesterId
+                            salesOrderId, // referenceCode
+                            "판매 주문 출하" // reason
+                    );
+
+                    // 2. 예약 재고 해제 및 forShipmentCount 차감
+                    productStock = productStockRepository.findByProductId(item.getItemId())
+                            .orElseThrow(() -> new RuntimeException("ProductStock을 찾을 수 없습니다: " + item.getItemId()));
+
                     BigDecimal remainingQuantity = quantity;
+                    // 2-1. 먼저 예약 재고에서 차감
                     if (currentReserved.compareTo(BigDecimal.ZERO) > 0) {
                         BigDecimal fromReserved = currentReserved.min(remainingQuantity);
-                        productStock.consumeReservedForShipmentStock(fromReserved);
+                        productStock.releaseReservation(fromReserved);
                         remainingQuantity = remainingQuantity.subtract(fromReserved);
 
                         log.info("예약 재고 해제 - productId={}, 해제량={}, 남은차감량={}",
                                 item.getItemId(), fromReserved, remainingQuantity);
                     }
 
-                    // 3-2. 남은 수량은 forShipmentCount에서 차감
+                    // 2-2. 남은 수량은 forShipmentCount에서 차감
                     if (remainingQuantity.compareTo(BigDecimal.ZERO) > 0) {
                         if (currentForShipment.compareTo(remainingQuantity) < 0) {
                             throw new RuntimeException(
@@ -245,7 +260,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                                 item.getItemId(), remainingQuantity, currentForShipment, newForShipment);
                     }
 
-                    // 3-3. DB 저장
+                    // 2-3. DB 저장
                     productStockRepository.save(productStock);
                     reducedQuantities.put(item.getItemId(), quantity);
 

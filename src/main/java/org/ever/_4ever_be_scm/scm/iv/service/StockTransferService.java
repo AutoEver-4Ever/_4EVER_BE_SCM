@@ -24,12 +24,12 @@ public interface StockTransferService {
      * @param request 재고 이동 요청 정보
      */
     void createStockTransfer(StockTransferRequestDto request, String requesterId);
-    
+
     /**
      * 재고 입출고 처리
-     * 
-     * @param request 재고 입출고 요청 정보
+     *   재고 입출고 요청 정보
      */
-    void processStockDelivery(StockDeliveryRequestDto request);
+    void processStockDelivery(String productId, java.math.BigDecimal quantity, String requesterId,
+                              String referenceCode, String reason);
 
 }
