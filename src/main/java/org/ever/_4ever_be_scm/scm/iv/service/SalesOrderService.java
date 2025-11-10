@@ -52,5 +52,5 @@ public interface SalesOrderService {
      * @param requestDto 요청 DTO (itemIds)
      * @return DeferredResult
      */
-    DeferredResult<ResponseEntity<ApiResponse<Void>>> changeSalesOrderStatusAsync(String salesOrderId, SalesOrderStatusChangeRequestDto requestDto);
+    DeferredResult<ResponseEntity<ApiResponse<Void>>> changeSalesOrderStatusAsync(String salesOrderId, SalesOrderStatusChangeRequestDto requestDto,String requesterId);
 }

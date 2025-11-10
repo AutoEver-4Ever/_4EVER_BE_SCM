@@ -23,7 +23,7 @@ public interface MesService {
     /**
      * MES 시작 (비동기 - 분산 트랜잭션)
      */
-    DeferredResult<ResponseEntity<ApiResponse<Void>>> startMesAsync(String mesId);
+    DeferredResult<ResponseEntity<ApiResponse<Void>>> startMesAsync(String mesId, String requesterId);
 
     /**
      * 공정 시작
@@ -38,5 +38,5 @@ public interface MesService {
     /**
      * MES 완료 (비동기 - 분산 트랜잭션)
      */
-    DeferredResult<ResponseEntity<ApiResponse<Void>>> completeMesAsync(String mesId);
+    DeferredResult<ResponseEntity<ApiResponse<Void>>> completeMesAsync(String mesId, String requesterId);
 }

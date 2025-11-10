@@ -54,6 +54,7 @@ public class MesServiceImpl implements MesService {
     private final org.ever._4ever_be_scm.infrastructure.kafka.producer.KafkaProducerService kafkaProducerService;
     private final org.ever._4ever_be_scm.common.async.GenericAsyncResultManager<Void> asyncResultManager;
     private final InternalUserServicePort internalUserServicePort;
+    private final org.ever._4ever_be_scm.scm.iv.service.StockTransferService stockTransferService;
 
     @Override
     @Transactional(readOnly = true)
@@ -265,7 +266,7 @@ public class MesServiceImpl implements MesService {
 
     @Override
     @Transactional
-    public DeferredResult<ResponseEntity<ApiResponse<Void>>> startMesAsync(String mesId) {
+    public DeferredResult<ResponseEntity<ApiResponse<Void>>> startMesAsync(String mesId, String requesterId) {
         log.info("MES 비동기 시작: mesId={}", mesId);
 
         // DeferredResult 생성 (타임아웃 30초)
@@ -299,7 +300,7 @@ public class MesServiceImpl implements MesService {
             mesRepository.save(mes);
 
             // 4. 자재 소비
-            consumeMaterials(mes);
+            consumeMaterials(mes, requesterId);
 
             // 5. 트랜잭션 ID 생성 및 DeferredResult 등록
             String transactionId = java.util.UUID.randomUUID().toString();
@@ -426,7 +427,7 @@ public class MesServiceImpl implements MesService {
 
     @Override
     @Transactional
-    public DeferredResult<ResponseEntity<ApiResponse<Void>>> completeMesAsync(String mesId) {
+    public DeferredResult<ResponseEntity<ApiResponse<Void>>> completeMesAsync(String mesId, String requesterId) {
         log.info("MES 비동기 완료: mesId={}", mesId);
 
         // DeferredResult 생성 (타임아웃 30초)
@@ -465,7 +466,7 @@ public class MesServiceImpl implements MesService {
             mesRepository.save(mes);
 
             // 4. 완제품 재고 증가
-            increaseProductStock(mes);
+            increaseProductStock(mes, requesterId);
 
             // 5. 해당 quotation의 모든 MES가 완료되었는지 확인
             String quotationId = mes.getQuotationId();
@@ -655,7 +656,7 @@ public class MesServiceImpl implements MesService {
     /**
      * 자재 소비 처리 (MES 시작 시)
      */
-    private void consumeMaterials(Mes mes) {
+    private void consumeMaterials(Mes mes, String requesterId) {
         log.info("자재 소비 시작: mesId={}, bomId={}, quotationId={}",
                 mes.getId(), mes.getBomId(), mes.getQuotationId());
 
@@ -668,7 +669,7 @@ public class MesServiceImpl implements MesService {
 
         // 2. BOM의 모든 원자재 소비 (재귀적, quotationId 전달)
         Set<String> processedProducts = new HashSet<>();
-        consumeBomMaterials(bom, mes.getQuantity(), mes.getQuotationId(), processedProducts);
+        consumeBomMaterials(bom, mes.getQuantity(), mes.getQuotationId(), processedProducts, mes.getMesNumber(),requesterId);
 
         log.info("자재 소비 완료: mesId={}, quotationId={}", mes.getId(), mes.getQuotationId());
     }
@@ -676,7 +677,7 @@ public class MesServiceImpl implements MesService {
     /**
      * BOM의 자재 재귀적 소비 (quotationId 전달하여 MRP 소비량 기록)
      */
-    private void consumeBomMaterials(Bom bom, Integer quantity, String quotationId, Set<String> processedProducts) {
+    private void consumeBomMaterials(Bom bom, Integer quantity, String quotationId, Set<String> processedProducts,String mesNumber, String requesterId) {
         List<BomItem> bomItems = bomItemRepository.findByBomId(bom.getId());
 
         for (BomItem bomItem : bomItems) {
@@ -690,13 +691,13 @@ public class MesServiceImpl implements MesService {
 
             if ("MATERIAL".equals(bomItem.getComponentType())) {
                 // 원자재: 재고 소비 + MRP 소비량 기록
-                consumeStock(bomItem.getComponentId(), requiredQuantity, quotationId);
+                consumeStock(bomItem.getComponentId(), requiredQuantity, quotationId,mesNumber, requesterId);
 
             } else if ("ITEM".equals(bomItem.getComponentType())) {
                 // 부품: 하위 BOM 탐색
                 Bom childBom = bomRepository.findByProductId(bomItem.getComponentId()).orElse(null);
                 if (childBom != null) {
-                    consumeBomMaterials(childBom, requiredQuantity.intValue(), quotationId, processedProducts);
+                    consumeBomMaterials(childBom, requiredQuantity.intValue(), quotationId, processedProducts,mesNumber, requesterId);
                 }
             }
         }
@@ -705,7 +706,7 @@ public class MesServiceImpl implements MesService {
     /**
      * 재고 소비 (availableCount 감소, reservedCount 해제)
      */
-    private void consumeStock(String productId, BigDecimal quantity, String quotationId) {
+    private void consumeStock(String productId, BigDecimal quantity, String quotationId,String mesNumber, String requesterId) {
         // 1. 물리적 재고 소비
         ProductStock stock = productStockRepository.findByProductId(productId).orElse(null);
 
@@ -714,8 +715,21 @@ public class MesServiceImpl implements MesService {
             return;
         }
 
+        //TODO 입출고처리로 변경완료
         // consumeReservedStock 메서드 사용 (예약 해제 + 실제 재고 감소)
-        stock.consumeReservedStock(quantity);
+        // 1. 출고 처리
+        stockTransferService.processStockDelivery(
+                productId,
+                quantity.negate(), // 음수로 변환 (출고)
+                requesterId, // requesterId
+                mesNumber, // referenceCode
+                "MES 자재 소비" // reason
+        );
+
+        // 2. 예약 해제 처리
+        stock = productStockRepository.findByProductId(productId)
+                .orElseThrow(() -> new RuntimeException("재고를 찾을 수 없습니다."));
+        stock.releaseReservation(quantity);
         productStockRepository.save(stock);
 
         log.info("재고 소비: productId={}, 소비량={}, 현재={}, 예약={}",
@@ -741,7 +755,7 @@ public class MesServiceImpl implements MesService {
     /**
      * 출하할 제품 증가
      */
-    private void increaseProductStock(Mes mes) {
+    private void increaseProductStock(Mes mes, String requesterId) {
         log.info("완제품 재고 증가: productId={}, quantity={}", mes.getProductId(), mes.getQuantity());
 
         ProductStock stock = productStockRepository.findByProductId(mes.getProductId()).orElse(null);
@@ -752,16 +766,24 @@ public class MesServiceImpl implements MesService {
 
             throw new RuntimeException("재고가 없는 제품입니다.");
         } else {
+            //TODO 입출고처리로 변경완료
             // 재고에 증가 (forShipmentCount 증가)
             BigDecimal forShipmentCount = stock.getForShipmentCount() != null
                     ? stock.getForShipmentCount()
                     : BigDecimal.ZERO;
 
-            BigDecimal availableCount = stock.getAvailableCount() != null
-                    ? stock.getAvailableCount()
-                    : BigDecimal.ZERO;
+            // 1. 입고 처리
+            stockTransferService.processStockDelivery(
+                    mes.getProductId(),
+                    BigDecimal.valueOf(mes.getQuantity()),
+                    requesterId, // requesterId
+                    mes.getMesNumber(), // referenceCode
+                    "MES 완제품 생산" // reason
+            );
 
-            stock.setAvailableCount(availableCount.add(BigDecimal.valueOf(mes.getQuantity())));
+            // 2. forShipmentCount 증가 처리
+            stock = productStockRepository.findByProductId(mes.getProductId())
+                    .orElseThrow(() -> new RuntimeException("재고를 찾을 수 없습니다."));
             stock.setForShipmentCount(forShipmentCount.add(BigDecimal.valueOf(mes.getQuantity())));
             productStockRepository.save(stock);
 

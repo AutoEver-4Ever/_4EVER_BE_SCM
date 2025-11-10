@@ -76,7 +76,7 @@ public class StockTransferController {
     )
     public ResponseEntity<ApiResponse<String>> processStockDelivery(@RequestBody StockDeliveryRequestDto request) {
         try {
-            stockTransferService.processStockDelivery(request);
+//            stockTransferService.processStockDelivery(request);
             return ResponseEntity.ok(ApiResponse.success(null, "재고 입출고가 성공적으로 처리되었습니다.", HttpStatus.OK));
         } catch (Exception e) {
             return ResponseEntity.badRequest()

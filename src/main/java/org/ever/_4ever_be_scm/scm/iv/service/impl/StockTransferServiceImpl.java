@@ -116,41 +116,51 @@ public class StockTransferServiceImpl implements StockTransferService {
     }
     
     /**
-     * 재고 입출고 처리
-     * 
-     * @param request 재고 입출고 요청 정보
+     * 재고 입출고 처리 (requesterId 포함)
+     *
+     * @param productId 제품 ID
+     * @param quantity 입출고 수량 (양수: 입고, 음수: 출고)
+     * @param requesterId 요청자 ID
+     * @param referenceCode 참조 코드
+     * @param reason 사유
      */
     @Override
     @Transactional
-    public void processStockDelivery(StockDeliveryRequestDto request) {
+    public void processStockDelivery(String productId, BigDecimal quantity, String requesterId,
+                                      String referenceCode, String reason) {
         // 1. 현재 productStock 조회 (itemId로 Product 찾기)
-        ProductStock currentStock = productStockRepository.findByProductId(request.getItemId())
+        ProductStock currentStock = productStockRepository.findByProductId(productId)
                 .orElseThrow(() -> new RuntimeException("해당 제품의 재고를 찾을 수 없습니다."));
-        
+
         // 2. 이전 수량 저장
         BigDecimal previousCount = currentStock.getAvailableCount();
-        
+
         // 3. 입고/출고에 따른 수량 변경
         BigDecimal newTotalCount;
         BigDecimal newAvailableCount;
         String movementType;
         Warehouse fromWarehouse = null;
         Warehouse toWarehouse = null;
-        
-        if (request.getQuantity().compareTo(BigDecimal.ZERO) > 0) {
-            // 입고 (quantity > 0)
-            newTotalCount = currentStock.getAvailableCount().add(request.getQuantity());
-            newAvailableCount = currentStock.getAvailableCount().add(request.getQuantity());
+
+        // 담당자 결정: system이면 창고 담당자, 아니면 요청자
+        String createdBy = requesterId.equals("system")
+                ? currentStock.getWarehouse().getInternalUserId()
+                : requesterId;
+
+        if (quantity.compareTo(BigDecimal.ZERO) > 0) {
+            // 입고 (quantity > 0):
+            newTotalCount = currentStock.getAvailableCount().add(quantity);
+            newAvailableCount = currentStock.getAvailableCount().add(quantity);
             movementType = "입고";
             toWarehouse = currentStock.getWarehouse(); // 현재 창고로 입고
         } else {
-            // 출고 (quantity < 0)
-            BigDecimal absQuantity = request.getQuantity().abs();
+            // 출고 (quantity < 0): 요청자가 처리
+            BigDecimal absQuantity = quantity.abs();
             // 예약재고를 제외한 실제 가용재고로 체크
             BigDecimal actualAvailable = currentStock.getActualAvailableCount();
             if (actualAvailable.compareTo(absQuantity) < 0) {
-                throw new RuntimeException(String.format("출고할 수량이 실제 가용재고보다 많습니다. (요청: %s, 가용: %s, 예약재고: %s)", 
-                    absQuantity, actualAvailable, currentStock.getReservedCount()));
+                throw new RuntimeException(String.format("출고할 수량이 실제 가용재고보다 많습니다. (요청: %s, 가용: %s, 예약재고: %s)",
+                        absQuantity, actualAvailable, currentStock.getReservedCount()));
             }
             newTotalCount = currentStock.getAvailableCount().subtract(absQuantity);
             newAvailableCount = currentStock.getAvailableCount().subtract(absQuantity);
@@ -159,7 +169,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
 
         String status = calculateStatus(newAvailableCount.intValue(),currentStock.getSafetyCount().intValue());
-        
+
         // 4. ProductStock 업데이트 (예약재고 정보 유지)
         ProductStock updatedStock = ProductStock.builder()
                 .id(currentStock.getId())
@@ -168,25 +178,26 @@ public class StockTransferServiceImpl implements StockTransferService {
                 .availableCount(newAvailableCount)
                 .safetyCount(currentStock.getSafetyCount())
                 .reservedCount(currentStock.getReservedCount()) // 예약재고 정보 유지
+                .forShipmentCount(currentStock.getForShipmentCount()) // forShipmentCount 유지
                 .status(status)
                 .build();
-        
+
         productStockRepository.save(updatedStock);
-        
+
         // 5. ProductStockLog 생성
         ProductStockLog stockLog = ProductStockLog.builder()
                 .productStock(updatedStock)
                 .movementType(movementType)
-                .changeCount(request.getQuantity().abs())
+                .changeCount(quantity.abs())
                 .previousCount(previousCount)
                 .currentCount(newTotalCount)
                 .fromWarehouse(fromWarehouse)
                 .toWarehouse(toWarehouse)
-                .createdById("system") // 임의의 담당자 ID
-                .referenceCode(request.getReferenceCode())
-                .note(request.getReason())
+                .createdById(createdBy) // 입고: 창고 담당자, 출고: 요청자
+                .referenceCode(referenceCode)
+                .note(reason)
                 .build();
-        
+
         productStockLogRepository.save(stockLog);
     }
 
