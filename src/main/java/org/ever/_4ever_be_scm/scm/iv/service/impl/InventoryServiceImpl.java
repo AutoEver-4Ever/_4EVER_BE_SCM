@@ -221,7 +221,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .to(toWarehouseCode)
                 .from(formWarehouseCode)
                 .referenceNumber(stockLog.getReferenceCode())
-                .note(null)
+                .note(stockLog.getNote())
                 .build();
     }
     

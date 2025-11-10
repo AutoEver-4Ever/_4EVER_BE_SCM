@@ -561,7 +561,8 @@ public class BomServiceImpl implements BomService {
 
     @Override
     public List<ProductMapResponseDto> getProductMap() {
-        List<Product> products = productRepository.findAll();
+        // ProductStock에 존재하는 Product만 조회 (DISTINCT로 중복 제거)
+        List<Product> products = productStockRepository.findAllProductsInStock();
 
         return products.stream()
                 .map(product -> ProductMapResponseDto.builder()

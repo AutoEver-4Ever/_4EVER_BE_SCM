@@ -886,15 +886,9 @@ public class QuotationServiceImpl implements QuotationService {
     /**
      * 구성품목에 대한 MRP 생성 (재귀적)
      */
-    private void createMrpForComponent(String unusedMrpRunId, BomItem bomItem, Integer parentQuantity, 
-                                      LocalDate dueDate, Set<String> processedProducts, 
+    private void createMrpForComponent(String unusedMrpRunId, BomItem bomItem, Integer parentQuantity,
+                                      LocalDate dueDate, Set<String> processedProducts,
                                       Bom parentBom, String quotationId) {
-        
-        // 순환 참조 방지
-        if (processedProducts.contains(bomItem.getComponentId())) {
-            return;
-        }
-        processedProducts.add(bomItem.getComponentId());
 
         try {
             // componentType에 따라 Product 조회 방법이 다름
@@ -920,54 +914,107 @@ public class QuotationServiceImpl implements QuotationService {
             Integer shortageQuantity = Math.max(0, requiredQuantity - currentStock);
             Integer availableFromStock = Math.min(requiredQuantity, currentStock);
 
-            // 원자재 재고 예약 (재고에서 충당 가능한 만큼)
-            if (availableFromStock > 0) {
-                boolean reserved = stockReservationService.reserveStock(
-                    productIdForStock,
-                    BigDecimal.valueOf(availableFromStock)
-                );
-                if (!reserved) {
-                    log.warn("원자재 재고 예약 실패: productId={}, quantity={}",
-                        productIdForStock, availableFromStock);
-                } else {
-                    log.info("원자재 재고 예약 완료: productId={}, quantity={}",
-                        productIdForStock, availableFromStock);
+            // MATERIAL(원자재)와 ITEM(중간제품) 분리 처리
+            if ("MATERIAL".equals(component.getCategory())) {
+                // === 원자재 처리: 재고 예약 + MRP 생성 ===
+
+                // 원자재 재고 예약 (재고에서 충당 가능한 만큼)
+                if (availableFromStock > 0) {
+                    boolean reserved = stockReservationService.reserveStock(
+                        productIdForStock,
+                        BigDecimal.valueOf(availableFromStock)
+                    );
+                    if (!reserved) {
+                        log.warn("원자재 재고 예약 실패: productId={}, quantity={}",
+                            productIdForStock, availableFromStock);
+                    } else {
+                        log.info("원자재 재고 예약 완료: productId={}, quantity={}",
+                            productIdForStock, availableFromStock);
+                    }
                 }
-            }
 
-            // 배송 시작일 계산 (공급업체 배송일 고려)
-            int deliveryDays = 0;
-            if (component.getSupplierCompany() != null &&
-                component.getSupplierCompany().getDeliveryDays() != null) {
-                int seconds = (int) component.getSupplierCompany().getDeliveryDays().getSeconds();
-                deliveryDays = seconds / 86_400; // floor to day offset
-            }
+                // 배송 시작일 계산 (공급업체 배송일 고려)
+                int deliveryDays = 0;
+                if (component.getSupplierCompany() != null &&
+                    component.getSupplierCompany().getDeliveryDays() != null) {
+                    int seconds = (int) component.getSupplierCompany().getDeliveryDays().getSeconds();
+                    deliveryDays = seconds / 86_400; // floor to day offset
+                }
 
-            LocalDate procurementStartDate = dueDate.minusDays(deliveryDays);
-            LocalDate expectedArrivalDate = dueDate;
+                LocalDate procurementStartDate = dueDate.minusDays(deliveryDays);
+                LocalDate expectedArrivalDate = dueDate;
 
-            // MRP 레코드 생성
-            Mrp mrp = Mrp.builder()
-                .id(UUID.randomUUID().toString())
-                .bomId(parentBom.getId())
-                .quotationId(quotationId)
-                .productId(productIdForStock)
-                .requiredCount(BigDecimal.valueOf(requiredQuantity))
-                .shortageQuantity(BigDecimal.valueOf(shortageQuantity))  // 부족량 추가
-                .consumedCount(BigDecimal.ZERO)                          // 소비량 초기화
-                .procurementStart(procurementStartDate)
-                .expectedArrival(expectedArrivalDate)
-                .status(shortageQuantity > 0 ? "INSUFFICIENT" : "SUFFICIENT")
-                .build();
+                // 기존 MRP 조회 (중복 방지)
+                List<Mrp> existingMrps = mrpRepository.findByQuotationIdAndProductId(quotationId, productIdForStock);
 
-            mrpRepository.save(mrp);
+                Mrp mrp;
+                if (!existingMrps.isEmpty()) {
+                    // 기존 MRP에 수량 합산
+                    mrp = existingMrps.get(0);
 
-            log.info("MRP 생성: productId={}, name={}, category={}, 필요량={}, 현재재고={}, 재고예약={}, 부족량={}, 소비량=0",
-                     productIdForStock, component.getProductName(), component.getCategory(),
-                     requiredQuantity, currentStock, availableFromStock, shortageQuantity);
+                    BigDecimal newRequiredCount = mrp.getRequiredCount().add(BigDecimal.valueOf(requiredQuantity));
+                    BigDecimal newShortageQuantity = mrp.getShortageQuantity().add(BigDecimal.valueOf(shortageQuantity));
 
-            // 중간제품인 경우 하위 BOM 처리 (ITEM의 경우 componentId가 bomId)
-            if ("ITEM".equals(component.getCategory()) && shortageQuantity > 0) {
+                    mrp.setRequiredCount(newRequiredCount);
+                    mrp.setShortageQuantity(newShortageQuantity);
+
+                    // 하나라도 INSUFFICIENT면 전체 INSUFFICIENT
+                    if (shortageQuantity > 0) {
+                        mrp.setStatus("INSUFFICIENT");
+                    }
+
+                    // 날짜는 가장 빠른 것으로 유지
+                    if (procurementStartDate != null &&
+                        (mrp.getProcurementStart() == null || procurementStartDate.isBefore(mrp.getProcurementStart()))) {
+                        mrp.setProcurementStart(procurementStartDate);
+                    }
+                    if (expectedArrivalDate != null &&
+                        (mrp.getExpectedArrival() == null || expectedArrivalDate.isBefore(mrp.getExpectedArrival()))) {
+                        mrp.setExpectedArrival(expectedArrivalDate);
+                    }
+
+                    mrpRepository.save(mrp);
+
+                    log.info("MRP 수량 합산: productId={}, name={}, category={}, 기존필요량={}, 추가필요량={}, 합계필요량={}, 기존부족량={}, 추가부족량={}, 합계부족량={}",
+                             productIdForStock, component.getProductName(), component.getCategory(),
+                             mrp.getRequiredCount().subtract(BigDecimal.valueOf(requiredQuantity)).intValue(),
+                             requiredQuantity,
+                             newRequiredCount.intValue(),
+                             mrp.getShortageQuantity().subtract(BigDecimal.valueOf(shortageQuantity)).intValue(),
+                             shortageQuantity,
+                             newShortageQuantity.intValue());
+
+                } else {
+                    // 새 MRP 생성
+                    mrp = Mrp.builder()
+                        .bomId(parentBom.getId())
+                        .quotationId(quotationId)
+                        .productId(productIdForStock)
+                        .requiredCount(BigDecimal.valueOf(requiredQuantity))
+                        .shortageQuantity(BigDecimal.valueOf(shortageQuantity))
+                        .consumedCount(BigDecimal.ZERO)
+                        .procurementStart(procurementStartDate)
+                        .expectedArrival(expectedArrivalDate)
+                        .status(shortageQuantity > 0 ? "INSUFFICIENT" : "SUFFICIENT")
+                        .build();
+
+                    mrpRepository.save(mrp);
+
+                    log.info("MRP 생성: productId={}, name={}, category={}, 필요량={}, 현재재고={}, 재고예약={}, 부족량={}, 소비량=0",
+                             productIdForStock, component.getProductName(), component.getCategory(),
+                             requiredQuantity, currentStock, availableFromStock, shortageQuantity);
+                }
+
+            } else if ("ITEM".equals(component.getCategory()) && shortageQuantity > 0) {
+                // === 중간제품 처리: 순환 참조 체크 + 하위 BOM만 전개 ===
+
+                // 중간제품 순환 참조 방지
+                if (processedProducts.contains(productIdForStock)) {
+                    log.warn("중간제품 순환 참조 감지 및 스킵: productId={}", productIdForStock);
+                    return;
+                }
+                processedProducts.add(productIdForStock);
+
                 log.info("중간제품 하위 BOM 처리 시작: bomId={}, shortage={}", bomItem.getComponentId(), shortageQuantity);
                 Optional<Bom> subBomOpt = bomRepository.findById(bomItem.getComponentId());
                 log.info("하위 BOM 조회 결과: bomId={}, BOM존재={}", bomItem.getComponentId(), subBomOpt.isPresent());
@@ -979,7 +1026,7 @@ public class QuotationServiceImpl implements QuotationService {
                     for (BomItem subBomItem : subBomItems) {
                         log.info("하위 구성품 MRP 생성 시작: componentId={}", subBomItem.getComponentId());
                         createMrpForComponent(null, subBomItem, shortageQuantity,
-                                            expectedArrivalDate, new HashSet<>(processedProducts),
+                                            dueDate, processedProducts,
                                             subBomOpt.get(), quotationId);
                     }
                 } else {
@@ -989,9 +1036,10 @@ public class QuotationServiceImpl implements QuotationService {
                 log.info("중간제품 재고 충분 - 하위 MRP 생성 스킵: productId={}, name={}",
                     bomItem.getComponentId(), component.getProductName());
             }
-            
-        } finally {
-            processedProducts.remove(bomItem.getComponentId());
+
+        } catch (Exception e) {
+            log.error("MRP 생성 중 오류 발생: componentId={}", bomItem.getComponentId(), e);
+            throw e;
         }
     }
     

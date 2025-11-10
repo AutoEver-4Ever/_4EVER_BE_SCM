@@ -177,8 +177,8 @@ public class QuotationController {
     public ApiResponse<List<ToggleCodeLabelDto>> getMrpAvailableStatusToggle() {
         List<ToggleCodeLabelDto> list = List.of(
                 new ToggleCodeLabelDto("전체 상태", "ALL"),
-                new ToggleCodeLabelDto("확인", "SUFFICIENT"),
-                new ToggleCodeLabelDto("미확인", "INSUFFICIENT")
+                new ToggleCodeLabelDto("충족", "SUFFICIENT"),
+                new ToggleCodeLabelDto("미충족", "INSUFFICIENT")
         );
         return ApiResponse.success(list, "상태 목록 조회 성공", org.springframework.http.HttpStatus.OK);
     }
