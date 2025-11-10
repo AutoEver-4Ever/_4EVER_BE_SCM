@@ -315,7 +315,7 @@ public class BomServiceImpl implements BomService {
         Product product = productRepository.findById(bom.getProductId()).orElse(null);
         List<BomExplosion> explosions = bomExplosionRepository.findByParentBomId(bomId);
         List<BomDetailResponseDto.BomComponentDto> components = new ArrayList<>();
-        Map<String, List<BomDetailResponseDto.LevelStructureDto>> levelStructure = new HashMap<>();
+        List<BomDetailResponseDto.LevelStructureDto> levelStructure = new ArrayList<>();
 
         //  routing 수집을 위해 BomItem을 직접 조회하고 sequence 순으로 정렬
         List<BomItem> bomItems = bomItemRepository.findByBomId(bomId);
@@ -373,22 +373,6 @@ public class BomServiceImpl implements BomService {
                             .componentType(subComp.getComponentType())
                             .build());
                     }
-                    // levelStructure도 parentQuantity만큼 곱해서, 레벨+1로 추가
-                    subBomDetail.getLevelStructure().forEach((k, v) -> {
-                        String newLevel = "Level " + (parentLevel + 1);
-                        List<BomDetailResponseDto.LevelStructureDto> newList = new ArrayList<>();
-                        for (BomDetailResponseDto.LevelStructureDto subLevel : v) {
-                            String[] qtyUnit = subLevel.getQuantity().split(" ");
-                            int qty = Integer.parseInt(qtyUnit[0]) * parentQuantity;
-                            String unit = qtyUnit.length > 1 ? qtyUnit[1] : "";
-                            newList.add(BomDetailResponseDto.LevelStructureDto.builder()
-                                .code(subLevel.getCode())
-                                .name(subLevel.getName())
-                                .quantity(qty + " " + unit)
-                                .build());
-                        }
-                        levelStructure.merge(newLevel, newList, (oldV, newV) -> { oldV.addAll(newV); return oldV; });
-                    });
                 }
             } else if (compProduct != null) {
                 //  MATERIAL의 실제 Product unit 사용
@@ -402,13 +386,22 @@ public class BomServiceImpl implements BomService {
                     .supplierName(compProduct.getSupplierCompany() != null ? compProduct.getSupplierCompany().getCompanyName() : null)
                     .componentType(bomItem.getComponentType())
                     .build());
-                levelStructure.computeIfAbsent(levelStr, k -> new ArrayList<>())
-                    .add(BomDetailResponseDto.LevelStructureDto.builder()
-                        .code(compProduct.getProductCode())
-                        .name(compProduct.getProductName())
-                        .quantity(parentQuantity + " " + compProduct.getUnit())  //  해당 제품의 실제 unit
-                        .build());
             }
+        }
+
+        // levelStructure 생성 (트리 구조)
+        if (product != null) {
+            // 1. 최상위 BOM을 root로 추가
+            levelStructure.add(BomDetailResponseDto.LevelStructureDto.builder()
+                    .id("root-" + bomId)
+                    .code(bom.getBomCode())
+                    .name(product.getProductName())
+                    .level(0)
+                    .parentId(null)
+                    .build());
+
+            // 2. 재귀적으로 하위 구조 생성
+            buildLevelStructure(bomId, "root-" + bomId, 1, levelStructure);
         }
 
         //  routing은 이미 올바른 순서로 수집되었으므로 1부터 재부여만
@@ -523,6 +516,72 @@ public class BomServiceImpl implements BomService {
         BomItemWithRouting(BomItem bomItem, Routing routing) {
             this.bomItem = bomItem;
             this.routing = routing;
+        }
+    }
+
+    /**
+     * levelStructure를 재귀적으로 생성 (트리 구조)
+     *
+     * @param bomId 현재 BOM ID
+     * @param parentNodeId 부모 노드의 ID
+     * @param currentLevel 현재 레벨
+     * @param levelStructure 결과를 담을 리스트
+     */
+    private void buildLevelStructure(String bomId, String parentNodeId, int currentLevel,
+                                     List<BomDetailResponseDto.LevelStructureDto> levelStructure) {
+        // 현재 BOM의 모든 항목 조회
+        List<BomItem> bomItems = bomItemRepository.findByBomId(bomId);
+
+        for (BomItem bomItem : bomItems) {
+            String componentType = bomItem.getComponentType();
+            String componentId = bomItem.getComponentId();
+            Integer quantity = bomItem.getCount().intValue();
+            String unit = bomItem.getUnit();
+
+            if ("ITEM".equals(componentType)) {
+                // ITEM인 경우: 하위 BOM을 노드로 추가
+                Optional<Bom> childBomOpt = bomRepository.findById(componentId);
+                if (childBomOpt.isPresent()) {
+                    Bom childBom = childBomOpt.get();
+                    Optional<Product> childProductOpt = productRepository.findById(childBom.getProductId());
+
+                    if (childProductOpt.isPresent()) {
+                        Product childProduct = childProductOpt.get();
+                        String nodeId = "bom-" + componentId;
+
+                        // 하위 BOM을 노드로 추가
+                        levelStructure.add(BomDetailResponseDto.LevelStructureDto.builder()
+                                .id(nodeId)
+                                .code(childBom.getBomCode())
+                                .name(childProduct.getProductName())
+                                .quantity(quantity)
+                                .unit(childProduct.getUnit())
+                                .level(currentLevel)
+                                .parentId(parentNodeId)
+                                .build());
+
+                        // 재귀 호출: 하위 BOM의 구성품들 추가
+                        buildLevelStructure(componentId, nodeId, currentLevel + 1, levelStructure);
+                    }
+                }
+            } else if ("MATERIAL".equals(componentType)) {
+                // MATERIAL인 경우: 원자재를 노드로 추가
+                Optional<Product> productOpt = productRepository.findById(componentId);
+                if (productOpt.isPresent()) {
+                    Product product = productOpt.get();
+                    String nodeId = "material-" + componentId;
+
+                    levelStructure.add(BomDetailResponseDto.LevelStructureDto.builder()
+                            .id(nodeId)
+                            .code(product.getProductCode())
+                            .name(product.getProductName())
+                            .quantity(quantity)
+                            .unit(product.getUnit())
+                            .level(currentLevel)
+                            .parentId(parentNodeId)
+                            .build());
+                }
+            }
         }
     }
 

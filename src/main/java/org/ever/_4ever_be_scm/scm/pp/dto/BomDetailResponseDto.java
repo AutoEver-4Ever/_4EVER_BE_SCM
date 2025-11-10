@@ -23,7 +23,7 @@ public class BomDetailResponseDto {
     private String statusCode;
     private LocalDateTime lastModifiedAt;
     private List<BomComponentDto> components;
-    private Map<String, List<LevelStructureDto>> levelStructure;
+    private List<LevelStructureDto> levelStructure;
     private List<RoutingDto> routing;
 
     @Data
@@ -46,9 +46,13 @@ public class BomDetailResponseDto {
     @AllArgsConstructor
     @Builder
     public static class LevelStructureDto {
+        private String id;
         private String code;
         private String name;
-        private String quantity;
+        private Integer quantity;
+        private String unit;
+        private Integer level;
+        private String parentId;
     }
 
     @Data
