@@ -25,17 +25,24 @@ public class SupplierUserInitializer implements CommandLineRunner {
     private final SupplierCompanyRepository supplierCompanyRepository;
 
     private static final String[] COMPANY_NAMES = new String[] {
-        "Ever Exterior Parts Co.",
-        "한빛 오토 외장",
-        "Seohan Body Panels",
-        "국일 카 바디",
-        "Prime Bumper & Grill",
-        "성우 모터스 트림",
-        "Aurora Auto Exterior",
-        "동림 차체 솔루션",
-        "Neo Fascia Tech",
-        "현우 자동차 외장"
+            "Ever Exterior Parts Co.",
+            "한빛 오토 외장",
+            "Seohan Body Panels",
+            "국일 카 바디",
+            "Prime Bumper & Grill",
+            "성우 모터스 트림",
+            "Aurora Auto Exterior",
+            "동림 차체 솔루션",
+            "Neo Fascia Tech",
+            "현우 자동차 외장",
+            "Global Auto Trim",
+            "한성 파츠",
+            "NextGen Automotive",
+            "아진 오토파츠",
+            "TopLine Components",
+            "AutoX Korea"
     };
+
 
     private static final String[] BASE_ADDRESSES = new String[] {
         "경기도 화성시 자동차산업로 123",
@@ -165,9 +172,9 @@ public class SupplierUserInitializer implements CommandLineRunner {
 
         int leadTimeSeconds;
         if (idx == 0) leadTimeSeconds = 10;          // 10초
-        else if (idx == 1) leadTimeSeconds = 30;     // 30초
-        else if (idx == 2) leadTimeSeconds = 300;    // 5분
-        else leadTimeSeconds = 300 + ((idx - 3) % 6) * 60; // 5~10분 범위
+        else if (idx == 1) leadTimeSeconds = 7;     // 7초
+        else if (idx == 2) leadTimeSeconds = 6;    // 6초
+        else leadTimeSeconds = 5 + ((idx - 3) % 11); // 5~15초 범위
 
         SupplierCompany company = SupplierCompany.builder()
             .id(userId)           // 공급사 ID를 사용자 ID와 동일하게 고정

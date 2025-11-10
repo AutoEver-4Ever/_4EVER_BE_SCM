@@ -28,7 +28,7 @@ public interface ProductOrderRepository extends JpaRepository<ProductOrder, Stri
     
     /**
      * 상태별, dueDate 기준 날짜 범위로 ProductOrder 조회
-     * 
+     *
      * @param approvalStatus 승인 상태
      * @param startDate 시작일
      * @param endDate 종료일
@@ -37,6 +37,18 @@ public interface ProductOrderRepository extends JpaRepository<ProductOrder, Stri
      */
     Page<ProductOrder> findByApprovalId_ApprovalStatusAndDueDateBetween(
             String approvalStatus, LocalDate startDate, LocalDate endDate, Pageable pageable);
+
+    /**
+     * 상태별, approval의 updatedAt 기준 날짜 범위로 ProductOrder 조회
+     *
+     * @param approvalStatus 승인 상태
+     * @param startDateTime 시작일시
+     * @param endDateTime 종료일시
+     * @param pageable 페이징 정보
+     * @return ProductOrder 페이지
+     */
+    Page<ProductOrder> findByApprovalId_ApprovalStatusAndApprovalId_UpdatedAtBetween(
+            String approvalStatus, LocalDateTime startDateTime, LocalDateTime endDateTime, Pageable pageable);
     
     /**
      * 승인 상태별 ProductOrder 개수 조회

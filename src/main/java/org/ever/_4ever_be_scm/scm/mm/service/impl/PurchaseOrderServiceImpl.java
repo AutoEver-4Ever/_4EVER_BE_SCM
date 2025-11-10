@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.ever._4ever_be_scm.common.response.ApiResponse;
 import org.ever._4ever_be_scm.infrastructure.kafka.config.KafkaTopicConfig;
 import org.ever._4ever_be_scm.scm.iv.entity.Product;
+import org.ever._4ever_be_scm.scm.iv.entity.ProductStock;
 import org.ever._4ever_be_scm.scm.iv.entity.SupplierCompany;
 import org.ever._4ever_be_scm.scm.iv.entity.SupplierUser;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductRepository;
@@ -51,6 +52,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private final org.ever._4ever_be_scm.infrastructure.kafka.producer.KafkaProducerService kafkaProducerService;
     private final org.ever._4ever_be_scm.common.async.GenericAsyncResultManager<Void> asyncResultManager;
     private final org.ever._4ever_be_scm.scm.iv.service.StockTransferService stockTransferService;
+    private final org.ever._4ever_be_scm.scm.iv.repository.SupplierCompanyRepository supplierCompanyRepository;
+    private final org.ever._4ever_be_scm.infrastructure.redis.service.DeliverySchedulerService deliverySchedulerService;
 
     @Override
     @Transactional(readOnly = true)  
@@ -377,6 +380,16 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         productOrder.setShipmentId(shipment);
         productOrderRepository.save(productOrder);
 
+        // 1-1. Approval 상태 업데이트
+        if (productOrder.getApprovalId() != null) {
+            ProductOrderApproval approval = productOrder.getApprovalId();
+            approval = approval.toBuilder()
+                    .approvalStatus("DELIVERING")
+                    .build();
+            productOrderApprovalRepository.save(approval);
+            log.info("발주서 승인 상태 업데이트 - purchaseOrderId: {}, status: DELIVERING", purchaseOrderId);
+        }
+
         // 2. MRP Run 상태 업데이트 (mrpRunId가 있는 경우만)
         List<ProductOrderItem> items = productOrderItemRepository.findByProductOrderId(purchaseOrderId);
         for (ProductOrderItem item : items) {
@@ -386,6 +399,50 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 mrpRun.setStatus("DELIVERING");  // 배송중
                 mrpRunRepository.save(mrpRun);
             }
+        }
+
+        // 3. 자동 입고 완료 스케줄링
+        // Supplier의 deliveryDays를 조회하여 자동으로 입고 완료 처리 예약
+        scheduleAutoDeliveryCompletion(productOrder);
+    }
+
+    /**
+     * 자동 입고 완료 스케줄링
+     * Supplier의 deliveryDays 만큼 지연 후 자동으로 completeDelivery 호출
+     */
+    private void scheduleAutoDeliveryCompletion(ProductOrder productOrder) {
+        try {
+            // SupplierCompany 조회 (발주서의 supplierCompanyName으로 조회)
+            SupplierCompany supplierCompany = supplierCompanyRepository
+                    .findByCompanyName(productOrder.getSupplierCompanyName())
+                    .orElse(null);
+
+            if (supplierCompany == null) {
+                log.warn("공급업체 정보를 찾을 수 없어 자동 입고 완료를 예약하지 않습니다. - supplierCompanyName: {}",
+                        productOrder.getSupplierCompanyName());
+                return;
+            }
+
+            if (supplierCompany.getDeliveryDays() == null) {
+                log.warn("공급업체의 배송 소요 기간이 설정되지 않아 자동 입고 완료를 예약하지 않습니다. - supplierCompany: {}",
+                        supplierCompany.getCompanyName());
+                return;
+            }
+
+            // DeliverySchedulerService를 통해 자동 완료 예약
+            deliverySchedulerService.scheduleDeliveryCompletion(
+                    productOrder.getId(),
+                    supplierCompany.getDeliveryDays()
+            );
+
+            log.info("자동 입고 완료 예약 완료 - purchaseOrderId: {}, deliveryDays: {}일",
+                    productOrder.getId(),
+                    supplierCompany.getDeliveryDays().toDays());
+
+        } catch (Exception e) {
+            log.error("자동 입고 완료 예약 중 오류 발생 - purchaseOrderId: {}, error: {}",
+                    productOrder.getId(), e.getMessage(), e);
+            // 스케줄링 실패해도 배송 시작은 정상 처리됨
         }
     }
 
@@ -405,6 +462,16 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         shipment.setDeliveredAt(java.time.LocalDate.now());
         productOrderShipmentRepository.save(shipment);
 
+        // 1-1. Approval 상태 업데이트
+        if (productOrder.getApprovalId() != null) {
+            ProductOrderApproval approval = productOrder.getApprovalId();
+            approval = approval.toBuilder()
+                    .approvalStatus("DELIVERED")
+                    .build();
+            productOrderApprovalRepository.save(approval);
+            log.info("발주서 승인 상태 업데이트 - purchaseOrderId: {}, status: DELIVERED", purchaseOrderId);
+        }
+
         // 2. 재고 증가 및 MRP Run 상태 업데이트
         List<ProductOrderItem> items = productOrderItemRepository.findByProductOrderId(purchaseOrderId);
         for (ProductOrderItem item : items) {
@@ -412,9 +479,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             Product product = productRepository.findById(item.getProductId())
                 .orElseThrow(() -> new RuntimeException("제품을 찾을 수 없습니다: " + item.getProductId()));
 
-            org.ever._4ever_be_scm.scm.iv.entity.ProductStock stock = productStockRepository
+            ProductStock stock = productStockRepository
                 .findByProductId(item.getProductId())
-                .orElse(org.ever._4ever_be_scm.scm.iv.entity.ProductStock.builder()
+                .orElse(ProductStock.builder()
                     .product(product)
                     .availableCount(java.math.BigDecimal.ZERO)
                     .reservedCount(java.math.BigDecimal.ZERO)

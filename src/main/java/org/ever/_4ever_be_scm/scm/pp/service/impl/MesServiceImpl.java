@@ -463,7 +463,10 @@ public class MesServiceImpl implements MesService {
             // 3. MES 상태 변경
             mes.setStatus("COMPLETED");
             mes.setProgressRate(100);
+            mes.setEndDate(LocalDate.now());
             mesRepository.save(mes);
+
+            log.info("MES 완료 처리: mesId={}, endDate={}", mesId, mes.getEndDate());
 
             // 4. 완제품 재고 증가
             increaseProductStock(mes, requesterId);
@@ -599,7 +602,7 @@ public class MesServiceImpl implements MesService {
                 // 3. INSUFFICIENT인 경우 MRP Run 입고 완료 확인
                 if ("INSUFFICIENT".equals(mrp.getStatus())) {
                     List<MrpRun> completedRuns = mrpRunRepository
-                            .findByQuotationIdAndProductIdAndStatus(quotationId, productId, "COMPLETED");
+                            .findByQuotationIdAndProductIdAndStatus(quotationId, productId, "DELIVERED");
 
                     if (completedRuns.isEmpty()) {
                         shortageItems.add(productName + " (입고 미완료)");
@@ -678,29 +681,52 @@ public class MesServiceImpl implements MesService {
      * BOM의 자재 재귀적 소비 (quotationId 전달하여 MRP 소비량 기록)
      */
     private void consumeBomMaterials(Bom bom, Integer quantity, String quotationId, Set<String> processedProducts,String mesNumber, String requesterId) {
+        log.info("=== BOM 자재 소비 시작: bomId={}, quantity={}, processedCount={} ===",
+                bom.getId(), quantity, processedProducts.size());
+
         List<BomItem> bomItems = bomItemRepository.findByBomId(bom.getId());
+        log.info("BOM Items 수: {}", bomItems.size());
 
         for (BomItem bomItem : bomItems) {
-            // 순환 참조 방지
-            if (processedProducts.contains(bomItem.getComponentId())) {
-                continue;
-            }
-            processedProducts.add(bomItem.getComponentId());
-
             BigDecimal requiredQuantity = bomItem.getCount().multiply(BigDecimal.valueOf(quantity));
 
+            log.info("처리 중: componentId={}, type={}, count={}, requiredQty={}",
+                    bomItem.getComponentId(), bomItem.getComponentType(), bomItem.getCount(), requiredQuantity);
+
             if ("MATERIAL".equals(bomItem.getComponentType())) {
-                // 원자재: 재고 소비 + MRP 소비량 기록
+                // 원자재: 순환 참조 체크 없이 항상 소비 (같은 원자재를 여러 곳에서 사용 가능)
+                log.info(">>> MATERIAL 소비: componentId={}, quantity={}", bomItem.getComponentId(), requiredQuantity);
                 consumeStock(bomItem.getComponentId(), requiredQuantity, quotationId,mesNumber, requesterId);
 
             } else if ("ITEM".equals(bomItem.getComponentType())) {
-                // 부품: 하위 BOM 탐색
-                Bom childBom = bomRepository.findByProductId(bomItem.getComponentId()).orElse(null);
-                if (childBom != null) {
-                    consumeBomMaterials(childBom, requiredQuantity.intValue(), quotationId, processedProducts,mesNumber, requesterId);
+                // 중간제품: ITEM의 componentId는 bomId임!
+                String bomId = bomItem.getComponentId();
+
+                log.info(">>> ITEM 하위 BOM 처리: bomId={}", bomId);
+
+                // 하위 BOM 조회 (componentId가 bomId이므로 findById 사용)
+                Bom childBom = bomRepository.findById(bomId).orElse(null);
+
+                if (childBom == null) {
+                    log.warn("하위 BOM이 없음: bomId={}", bomId);
+                    continue;
                 }
+
+                // 중간제품의 productId로 순환 참조 방지
+                String productId = childBom.getProductId();
+                if (processedProducts.contains(productId)) {
+                    log.warn("!!! 중간제품 순환 참조 감지 및 스킵: productId={}", productId);
+                    continue;
+                }
+                processedProducts.add(productId);
+
+                log.info("하위 BOM 발견: childBomId={}, productId={}, 재귀 호출 quantity={}",
+                        childBom.getId(), productId, requiredQuantity.intValue());
+                consumeBomMaterials(childBom, requiredQuantity.intValue(), quotationId, processedProducts, mesNumber, requesterId);
             }
         }
+
+        log.info("=== BOM 자재 소비 완료: bomId={} ===", bom.getId());
     }
 
     /**
@@ -717,7 +743,14 @@ public class MesServiceImpl implements MesService {
 
         //TODO 입출고처리로 변경완료
         // consumeReservedStock 메서드 사용 (예약 해제 + 실제 재고 감소)
-        // 1. 출고 처리
+        // 1. 예약 해제 처리 (먼저 실행)
+        stock.releaseReservation(quantity);
+        productStockRepository.save(stock);
+
+        log.info("예약 해제 완료: productId={}, 해제량={}, 남은예약={}",
+                productId, quantity, stock.getReservedCount());
+
+        // 2. 출고 처리 (예약 해제 후 실행)
         stockTransferService.processStockDelivery(
                 productId,
                 quantity.negate(), // 음수로 변환 (출고)
@@ -726,13 +759,11 @@ public class MesServiceImpl implements MesService {
                 "MES 자재 소비" // reason
         );
 
-        // 2. 예약 해제 처리
+        // 3. 최종 재고 조회 및 로그
         stock = productStockRepository.findByProductId(productId)
                 .orElseThrow(() -> new RuntimeException("재고를 찾을 수 없습니다."));
-        stock.releaseReservation(quantity);
-        productStockRepository.save(stock);
 
-        log.info("재고 소비: productId={}, 소비량={}, 현재={}, 예약={}",
+        log.info("재고 소비 완료: productId={}, 소비량={}, 현재가용={}, 예약={}",
                 productId, quantity, stock.getAvailableCount(), stock.getReservedCount());
 
         // 2. MRP의 consumedCount 증가 (견적별 소비 추적)
