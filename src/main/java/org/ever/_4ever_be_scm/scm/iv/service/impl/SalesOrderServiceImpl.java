@@ -56,7 +56,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         SdOrderListResponseDto sdResponse = sdOrderServicePort.getSalesOrderList(
                 pageable.getPageNumber(), 
                 pageable.getPageSize(), 
-                "IN_PROGRESS"
+                "IN_PRODUCTION"
         );
         
         // DTO 변환
@@ -221,22 +221,9 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                     log.info("재고 차감 시작 - productId={}, quantity={}, reserved={}, forShipment={}",
                             item.getItemId(), quantity, currentReserved, currentForShipment);
 
-                    //TODO 입출고처리로 변경 완료
-                    // 1. 출고 처리
-                    stockTransferService.processStockDelivery(
-                            item.getItemId(),
-                            quantity.negate(), // 음수로 변환 (출고)
-                            requesterId, // requesterId
-                            salesOrderId, // referenceCode
-                            "판매 주문 출하" // reason
-                    );
-
-                    // 2. 예약 재고 해제 및 forShipmentCount 차감
-                    productStock = productStockRepository.findByProductId(item.getItemId())
-                            .orElseThrow(() -> new RuntimeException("ProductStock을 찾을 수 없습니다: " + item.getItemId()));
-
+                    // 1. 예약 재고 해제 및 forShipmentCount 차감 (출고 처리보다 먼저 실행)
                     BigDecimal remainingQuantity = quantity;
-                    // 2-1. 먼저 예약 재고에서 차감
+                    // 1-1. 먼저 예약 재고에서 차감
                     if (currentReserved.compareTo(BigDecimal.ZERO) > 0) {
                         BigDecimal fromReserved = currentReserved.min(remainingQuantity);
                         productStock.releaseReservation(fromReserved);
@@ -246,7 +233,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                                 item.getItemId(), fromReserved, remainingQuantity);
                     }
 
-                    // 2-2. 남은 수량은 forShipmentCount에서 차감
+                    // 1-2. 남은 수량은 forShipmentCount에서 차감
                     if (remainingQuantity.compareTo(BigDecimal.ZERO) > 0) {
                         if (currentForShipment.compareTo(remainingQuantity) < 0) {
                             throw new RuntimeException(
@@ -261,8 +248,20 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                                 item.getItemId(), remainingQuantity, currentForShipment, newForShipment);
                     }
 
-                    // 2-3. DB 저장
+                    // 1-3. DB 저장 (출고 처리 전에 예약 해제를 먼저 저장)
                     productStockRepository.save(productStock);
+
+                    log.info("예약 해제 및 forShipmentCount 차감 완료 - productId={}", item.getItemId());
+
+                    // 2. 출고 처리 (예약 해제 후 실행)
+                    stockTransferService.processStockDelivery(
+                            item.getItemId(),
+                            quantity.negate(), // 음수로 변환 (출고)
+                            requesterId, // requesterId
+                            salesOrderId, // referenceCode
+                            "판매 주문 출하" // reason
+                    );
+
                     reducedQuantities.put(item.getItemId(), quantity);
 
                     log.info("재고 차감 완료 - productId={}, 총차감량={}", item.getItemId(), quantity);
