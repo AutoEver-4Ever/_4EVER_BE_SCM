@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -56,7 +58,7 @@ public class PurchaseOrdersServiceImpl implements PurchaseOrdersService {
     
     /**
      * 입고 완료 목록 조회 (RECEIVED 상태) - 날짜 필터링 포함
-     * 
+     *
      * @param pageable 페이징 정보
      * @param startDate 시작일 (선택사항)
      * @param endDate 종료일 (선택사항)
@@ -65,12 +67,16 @@ public class PurchaseOrdersServiceImpl implements PurchaseOrdersService {
     @Override
     public Page<PurchaseOrderDto> getReceivedPurchaseOrders(Pageable pageable, LocalDate startDate, LocalDate endDate) {
         Page<ProductOrder> productOrders;
-        
+
         // 날짜 필터링 조건에 따라 다른 쿼리 실행
         if (startDate != null && endDate != null) {
-            // 시작일과 종료일이 모두 있는 경우 - dueDate 기준 필터링
-            productOrders = productOrderRepository.findByApprovalId_ApprovalStatusAndDueDateBetween(
-                    "DELIVERED", startDate, endDate, pageable);
+            // 시작일과 종료일이 모두 있는 경우 - approval의 updatedAt 기준 필터링
+            // LocalDate를 LocalDateTime으로 변환 (시작일은 00:00:00, 종료일은 23:59:59)
+            LocalDateTime startDateTime = startDate.atStartOfDay();
+            LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
+
+            productOrders = productOrderRepository.findByApprovalId_ApprovalStatusAndApprovalId_UpdatedAtBetween(
+                    "DELIVERED", startDateTime, endDateTime, pageable);
         } else {
             // 날짜 필터가 없는 경우 - DELIVERED 상태만 조회
             productOrders = productOrderRepository.findByApprovalId_ApprovalStatus("DELIVERED", pageable);
