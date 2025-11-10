@@ -55,6 +55,8 @@ public class SalesOrderDetailDto {
     @AllArgsConstructor
     @Builder
     public static class OrderItemDto {
+
+        private String itemId;
         /**
          * 품목명
          */

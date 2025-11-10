@@ -161,6 +161,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         // 주문 아이템 목록 변환
         List<SalesOrderDetailDto.OrderItemDto> orderItems = sdDetail.getItems().stream()
                 .map(item -> SalesOrderDetailDto.OrderItemDto.builder()
+                        .itemId(item.getItemId())
                         .itemName(item.getItemName())
                         .quantity(item.getQuantity())
                         .uomName(item.getUonName())
