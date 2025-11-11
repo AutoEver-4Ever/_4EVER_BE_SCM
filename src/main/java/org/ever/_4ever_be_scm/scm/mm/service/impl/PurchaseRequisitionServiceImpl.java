@@ -1,18 +1,48 @@
 package org.ever._4ever_be_scm.scm.mm.service.impl;
 
+import com.github.f4b6a3.uuid.UuidCreator;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.ever._4ever_be_scm.scm.iv.entity.Product;
 import org.ever._4ever_be_scm.scm.iv.entity.SupplierCompany;
 import org.ever._4ever_be_scm.scm.iv.repository.ProductRepository;
 import org.ever._4ever_be_scm.scm.iv.repository.SupplierCompanyRepository;
-import org.ever._4ever_be_scm.scm.mm.dto.*;
-import org.ever._4ever_be_scm.scm.mm.entity.*;
+import org.ever._4ever_be_scm.scm.mm.dto.PurchaseRequisitionDetailResponseDto;
+import org.ever._4ever_be_scm.scm.mm.dto.PurchaseRequisitionListResponseDto;
+import org.ever._4ever_be_scm.scm.mm.dto.PurchaseRequisitionRejectRequestDto;
+import org.ever._4ever_be_scm.scm.mm.entity.ProductOrder;
+import org.ever._4ever_be_scm.scm.mm.entity.ProductOrderApproval;
+import org.ever._4ever_be_scm.scm.mm.entity.ProductOrderItem;
+import org.ever._4ever_be_scm.scm.mm.entity.ProductRequest;
+import org.ever._4ever_be_scm.scm.mm.entity.ProductRequestApproval;
+import org.ever._4ever_be_scm.scm.mm.entity.ProductRequestItem;
 import org.ever._4ever_be_scm.scm.mm.integration.dto.InternalUserResponseDto;
 import org.ever._4ever_be_scm.scm.mm.integration.port.InternalUserServicePort;
-import org.ever._4ever_be_scm.scm.mm.repository.*;
+import org.ever._4ever_be_scm.scm.mm.repository.ProductOrderApprovalRepository;
+import org.ever._4ever_be_scm.scm.mm.repository.ProductOrderItemRepository;
+import org.ever._4ever_be_scm.scm.mm.repository.ProductOrderRepository;
+import org.ever._4ever_be_scm.scm.mm.repository.ProductRequestApprovalRepository;
+import org.ever._4ever_be_scm.scm.mm.repository.ProductRequestItemRepository;
+import org.ever._4ever_be_scm.scm.mm.repository.ProductRequestRepository;
 import org.ever._4ever_be_scm.scm.mm.service.PurchaseRequisitionService;
 import org.ever._4ever_be_scm.scm.mm.vo.PurchaseRequisitionCreateVo;
 import org.ever._4ever_be_scm.scm.mm.vo.PurchaseRequisitionSearchVo;
+import org.ever.event.AlarmEvent;
+import org.ever.event.alarm.AlarmType;
+import org.ever.event.alarm.LinkType;
+import org.ever.event.alarm.SourceType;
+import org.ever.event.alarm.TargetType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -20,12 +50,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.*;
-import java.util.stream.Collectors;
-
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionService {
@@ -40,6 +65,7 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
     private final SupplierCompanyRepository supplierCompanyRepository;
     private final InternalUserServicePort internalUserServicePort;
     private final org.ever._4ever_be_scm.scm.pp.repository.MrpRunRepository mrpRunRepository;
+    private final org.ever._4ever_be_scm.infrastructure.kafka.producer.KafkaProducerService kafkaProducerService;
 
     @Override
     @Transactional
@@ -290,7 +316,43 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
                 .approvedBy(requesterId)
                 .build();
 
-        // TODO 알람 필요 : 구매요청 승인
+        // TODO 알람 완료 : 구매요청 승인 -> 구매요청 생성자
+        log.info("[ALARM] 구매요청서 승인 알림 생성 - : {}", productRequest.getId());
+        String targetId = productRequest.getRequesterId();
+        AlarmEvent alarmEventForCreate = AlarmEvent.builder()
+            .eventId(UuidCreator.getTimeOrderedEpoch().toString())
+            .eventType(AlarmEvent.class.getName())
+            .timestamp(LocalDateTime.now())
+            .source(SourceType.SCM.name())
+            .alarmId(UuidCreator.getTimeOrderedEpoch().toString())
+            .alarmType(AlarmType.PR)
+            .targetId(targetId)
+            .targetType(TargetType.EMPLOYEE)
+            .title("구매 요청서 승인")
+            .message("해당 구매 요청서가 승인되었습니다. 구매 요청서 번호 = " + productRequest.getProductRequestCode())
+            .linkId(productRequest.getId())
+            .linkType(LinkType.PURCHASE_REQUISITION)
+            .scheduledAt(null)
+            .build();
+
+        log.info("[ALARM] 알림 요청 전송 준비 - alarmId: {}, targetId: {}, targetType: {}, linkType: {}",
+            alarmEventForCreate.getAlarmId(), targetId, alarmEventForCreate.getTargetType(),
+            alarmEventForCreate.getLinkType());
+        kafkaProducerService.sendAlarmEvent(alarmEventForCreate)
+            .whenComplete((result, ex) -> {
+                if (ex != null) {
+                    log.error("[ALARM] 알림 요청 전송 실패 - alarmId: {}, targetId: {}, error: {}",
+                        alarmEventForCreate.getAlarmId(), targetId, ex.getMessage(), ex);
+                } else if (result != null) {
+                    log.info("[ALARM] 알림 요청 전송 성공 - topic: {}, partition: {}, offset: {}",
+                        result.getRecordMetadata().topic(),
+                        result.getRecordMetadata().partition(),
+                        result.getRecordMetadata().offset());
+                } else {
+                    log.warn("[ALARM] 알림 요청 전송 결과가 null 입니다 - alarmId: {}, targetId: {}",
+                        alarmEventForCreate.getAlarmId(), targetId);
+                }
+            });
 
         productRequestApprovalRepository.save(updatedApproval);
 
@@ -317,7 +379,43 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
 
         ProductRequestApproval approval = productRequest.getApprovalId();
 
-        // TODO 알람 필요 : 구매요청 반려
+        // TODO 알람 완료 : 구매요청 반려 -> 구매요청 생성자
+        log.info("[ALARM] 구매요청서 반려 알림 생성 - : {}", productRequest.getId());
+        String targetId = productRequest.getRequesterId();
+        AlarmEvent alarmEventForCreate = AlarmEvent.builder()
+            .eventId(UuidCreator.getTimeOrderedEpoch().toString())
+            .eventType(AlarmEvent.class.getName())
+            .timestamp(LocalDateTime.now())
+            .source(SourceType.SCM.name())
+            .alarmId(UuidCreator.getTimeOrderedEpoch().toString())
+            .alarmType(AlarmType.PR)
+            .targetId(targetId)
+            .targetType(TargetType.EMPLOYEE)
+            .title("구매 요청서 반려")
+            .message("해당 구매 요청서가 반려되었습니다. 구매 요청서 번호 = " + productRequest.getProductRequestCode())
+            .linkId(productRequest.getId())
+            .linkType(LinkType.PURCHASE_REQUISITION)
+            .scheduledAt(null)
+            .build();
+
+        log.info("[ALARM] 알림 요청 전송 준비 - alarmId: {}, targetId: {}, targetType: {}, linkType: {}",
+            alarmEventForCreate.getAlarmId(), targetId, alarmEventForCreate.getTargetType(),
+            alarmEventForCreate.getLinkType());
+        kafkaProducerService.sendAlarmEvent(alarmEventForCreate)
+            .whenComplete((result, ex) -> {
+                if (ex != null) {
+                    log.error("[ALARM] 알림 요청 전송 실패 - alarmId: {}, targetId: {}, error: {}",
+                        alarmEventForCreate.getAlarmId(), targetId, ex.getMessage(), ex);
+                } else if (result != null) {
+                    log.info("[ALARM] 알림 요청 전송 성공 - topic: {}, partition: {}, offset: {}",
+                        result.getRecordMetadata().topic(),
+                        result.getRecordMetadata().partition(),
+                        result.getRecordMetadata().offset());
+                } else {
+                    log.warn("[ALARM] 알림 요청 전송 결과가 null 입니다 - alarmId: {}, targetId: {}",
+                        alarmEventForCreate.getAlarmId(), targetId);
+                }
+            });
 
         //빌더를 이용해 새 객체 생성 (기존 값 유지하면서 일부 필드만 변경)
         ProductRequestApproval updatedApproval = approval.toBuilder()
