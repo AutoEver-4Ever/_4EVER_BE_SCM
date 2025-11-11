@@ -306,7 +306,6 @@ public class MesServiceImpl implements MesService {
             String transactionId = java.util.UUID.randomUUID().toString();
             asyncResultManager.registerResult(transactionId, deferredResult);
 
-            //TODO 알람 필요 - MES 생산 시작 알림 (담당자, 작업자)
 
             // 6. Business 서버로 Order 상태 변경 이벤트 발행
             MesStartEvent event = MesStartEvent.builder()
@@ -469,8 +468,6 @@ public class MesServiceImpl implements MesService {
             mesRepository.save(mes);
 
             log.info("MES 완료 처리: mesId={}, endDate={}", mesId, mes.getEndDate());
-
-            //TODO 알람 필요 - MES 생산 완료 알림 (담당자, 작업자)
 
             // 4. 완제품 재고 증가
             increaseProductStock(mes, requesterId);

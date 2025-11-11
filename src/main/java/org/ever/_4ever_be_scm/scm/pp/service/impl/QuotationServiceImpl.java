@@ -693,7 +693,7 @@ public class QuotationServiceImpl implements QuotationService {
                     // DeferredResult 등록
                     asyncResultManager.registerResult(transactionId, deferredResult);
 
-                    //TODO 알람 필요 - 견적 확정 알림 (담당자, 고객)
+                    //TODO 알람 필요 - 견적 확정 알림 (고객) -> 카프카쓰거든 비지니스에 리스너가있음 그놈에추가해도될듯
 
                     QuotationUpdateEvent event = QuotationUpdateEvent.builder()
                         .transactionId(transactionId)
