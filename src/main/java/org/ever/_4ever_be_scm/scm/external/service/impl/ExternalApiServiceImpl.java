@@ -135,7 +135,7 @@ public class ExternalApiServiceImpl implements ExternalApiService {
                     ProductStock productStock = stockList.isEmpty() ? null : stockList.get(0);
 
                     String itemName = product != null ? product.getProductName() : "알 수 없는 제품";
-                    BigDecimal inventoryQuantity = productStock != null ? productStock.getActualAvailableCount() : BigDecimal.ZERO; // 예약재고 제외 // 예약재고 제외
+                    BigDecimal inventoryQuantity = productStock != null ? productStock.getActualAvailableCount() : BigDecimal.ZERO; // 예약재고 제외
 
                     // 부족 수량 계산
                     BigDecimal shortageQuantity = requiredQuantity.subtract(inventoryQuantity);
