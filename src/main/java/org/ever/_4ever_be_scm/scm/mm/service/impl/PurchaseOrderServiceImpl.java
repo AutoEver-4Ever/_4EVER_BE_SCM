@@ -693,7 +693,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             log.info("발주서 승인 상태 업데이트 - purchaseOrderId: {}, status: DELIVERED", purchaseOrderId);
         }
 
-        // TODO 알람 필요 - 입고 완료 알림 -> 발주서 요청자
+        // TODO 알람 완료 - 입고 완료 알림 -> 발주서 요청자
         log.info("[ALARM] 발주서 입고 알림 생성 - : {}", purchaseOrderId);
         String targetId = productOrder.getRequesterId();
         AlarmEvent alarmEventForCreate = AlarmEvent.builder()

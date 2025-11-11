@@ -316,7 +316,7 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
                 .approvedBy(requesterId)
                 .build();
 
-        // TODO 알람 필요 : 구매요청 승인 -> 구매요청 생성자
+        // TODO 알람 완료 : 구매요청 승인 -> 구매요청 생성자
         log.info("[ALARM] 구매요청서 승인 알림 생성 - : {}", productRequest.getId());
         String targetId = productRequest.getRequesterId();
         AlarmEvent alarmEventForCreate = AlarmEvent.builder()
@@ -379,7 +379,7 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
 
         ProductRequestApproval approval = productRequest.getApprovalId();
 
-        // TODO 알람 필요 : 구매요청 반려 -> 구매요청 생성자
+        // TODO 알람 완료 : 구매요청 반려 -> 구매요청 생성자
         log.info("[ALARM] 구매요청서 반려 알림 생성 - : {}", productRequest.getId());
         String targetId = productRequest.getRequesterId();
         AlarmEvent alarmEventForCreate = AlarmEvent.builder()
