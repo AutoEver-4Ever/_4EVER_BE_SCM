@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
+import org.ever._4ever_be_scm.infrastructure.kafka.event.BaseEvent;
 
 @Getter
 @SuperBuilder

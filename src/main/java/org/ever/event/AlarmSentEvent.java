@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
+import org.ever._4ever_be_scm.infrastructure.kafka.event.BaseEvent;
 
 /**
  * 알림 발송 이벤트 클래스
