@@ -290,6 +290,8 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
                 .approvedBy(requesterId)
                 .build();
 
+        // TODO 알람 필요 : 구매요청 승인
+
         productRequestApprovalRepository.save(updatedApproval);
 
         // 2. ✅ MRP Run 상태 업데이트 (mrpRunId가 있는 경우만)
@@ -314,6 +316,8 @@ public class PurchaseRequisitionServiceImpl implements PurchaseRequisitionServic
                 .orElseThrow(() -> new IllegalArgumentException("구매요청서를 찾을 수 없습니다."));
 
         ProductRequestApproval approval = productRequest.getApprovalId();
+
+        // TODO 알람 필요 : 구매요청 반려
 
         //빌더를 이용해 새 객체 생성 (기존 값 유지하면서 일부 필드만 변경)
         ProductRequestApproval updatedApproval = approval.toBuilder()
