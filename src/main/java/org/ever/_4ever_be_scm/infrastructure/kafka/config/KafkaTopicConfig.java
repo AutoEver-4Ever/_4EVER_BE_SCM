@@ -43,6 +43,13 @@ public class KafkaTopicConfig {
     public static final String PURCHASE_ORDER_APPROVAL_TOPIC = "purchase-order-approval";
     public static final String PURCHASE_ORDER_APPROVAL_COMPLETION_TOPIC = "purchase-order-approval-completion";
 
+    // ALARM 서비스 토픽 (생산)
+    public static final String ALARM_REQUEST_TOPIC = "alarm-request"; // 알림 요청
+    public static final String ALARM_REQUEST_STATUS_TOPIC = "alarm-request-status"; // 알림 요청 상태
+    // 다른 서비스 이벤트 토픽 (소비)
+//    public static final String ALARM_SENT_TOPIC = "alarm-sent"; // 알림 발송
+//    public static final String ALARM_SENT_STATUS_TOPIC = "alarm-sent-status"; // 알림 발송 상태
+
     @Bean
     public NewTopic scmStockReserveTopic() {
         return TopicBuilder.name(SCM_STOCK_RESERVE_TOPIC)
