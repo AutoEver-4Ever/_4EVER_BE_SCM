@@ -1,5 +1,6 @@
 package org.ever._4ever_be_scm.scm.pp.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -21,6 +22,7 @@ public class QuotationGroupListResponseDto {
     /**
      * 페이지 정보
      */
+    @JsonProperty("page")
     private PageInfo pageInfo;
     
     @Getter
