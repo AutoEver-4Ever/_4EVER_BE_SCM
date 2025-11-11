@@ -693,6 +693,8 @@ public class QuotationServiceImpl implements QuotationService {
                     // DeferredResult 등록
                     asyncResultManager.registerResult(transactionId, deferredResult);
 
+                    //TODO 알람 필요 - 견적 확정 알림 (담당자, 고객)
+
                     QuotationUpdateEvent event = QuotationUpdateEvent.builder()
                         .transactionId(transactionId)
                         .quotationId(quotationId)

@@ -382,6 +382,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
             productOrderApprovalRepository.save(updatedApproval);
 
+            //TODO 알람 필요 - 발주서 승인 완료 알림 (담당자, 공급업체)
+
             // 3. MRP Run 상태 업데이트 (mrpRunId가 있는 경우만)
             List<ProductOrderItem> items = productOrderItemRepository.findByProductOrderId(purchaseOrderId);
             for (ProductOrderItem item : items) {
@@ -460,6 +462,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .build();
 
         productOrderApprovalRepository.save(updatedApproval);
+
+        //TODO 알람 필요 - 발주서 반려 알림 (담당자, 사유 포함)
     }
 
     @Override
@@ -489,6 +493,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             productOrderApprovalRepository.save(approval);
             log.info("발주서 승인 상태 업데이트 - purchaseOrderId: {}, status: DELIVERING", purchaseOrderId);
         }
+
+        //TODO 알람 필요 - 배송 시작 알림 (담당자, 공급업체)
 
         // 2. MRP Run 상태 업데이트 (mrpRunId가 있는 경우만)
         List<ProductOrderItem> items = productOrderItemRepository.findByProductOrderId(purchaseOrderId);
@@ -571,6 +577,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             productOrderApprovalRepository.save(approval);
             log.info("발주서 승인 상태 업데이트 - purchaseOrderId: {}, status: DELIVERED", purchaseOrderId);
         }
+
+        //TODO 알람 필요 - 입고 완료 알림 (담당자)
 
         // 2. 재고 증가 및 MRP Run 상태 업데이트
         List<ProductOrderItem> items = productOrderItemRepository.findByProductOrderId(purchaseOrderId);

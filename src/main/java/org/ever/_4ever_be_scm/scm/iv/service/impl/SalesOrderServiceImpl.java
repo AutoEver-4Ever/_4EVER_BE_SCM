@@ -272,6 +272,8 @@ public class SalesOrderServiceImpl implements SalesOrderService {
             String transactionId = java.util.UUID.randomUUID().toString();
             asyncResultManager.registerResult(transactionId, deferredResult);
 
+            //TODO 알람 필요 - 판매 주문 출하 완료 알림 (담당자, 고객)
+
             // 5. Business 서버로 상태 변경 이벤트 발행 (itemIds 제거)
             SalesOrderStatusChangeEvent event = SalesOrderStatusChangeEvent.builder()
                     .transactionId(transactionId)
