@@ -1,5 +1,12 @@
 package org.ever._4ever_be_scm.scm.mm.service.impl;
 
+import com.github.f4b6a3.uuid.UuidCreator;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ever._4ever_be_scm.common.response.ApiResponse;
@@ -19,7 +26,12 @@ import org.ever._4ever_be_scm.scm.mm.repository.ProductOrderItemRepository;
 import org.ever._4ever_be_scm.scm.mm.repository.ProductOrderRepository;
 import org.ever._4ever_be_scm.scm.mm.service.PurchaseOrderService;
 import org.ever._4ever_be_scm.scm.mm.vo.PurchaseOrderSearchVo;
+import org.ever.event.AlarmEvent;
 import org.ever.event.PurchaseOrderApprovalEvent;
+import org.ever.event.alarm.AlarmType;
+import org.ever.event.alarm.LinkType;
+import org.ever.event.alarm.SourceType;
+import org.ever.event.alarm.TargetType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -28,13 +40,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.async.DeferredResult;
-
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 
 @Slf4j
 @Service
@@ -382,6 +387,45 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
             productOrderApprovalRepository.save(updatedApproval);
 
+            // TODO 알람 완료 - 발주서 승인 -> 발주서 요청자
+            // 발주서 승인시 발주서 생성자에게 알림 전송
+            log.info("[ALARM] 발주서 승인 알림 생성 - : {}", purchaseOrderId);
+            String targetId = productOrder.getRequesterId();
+            AlarmEvent alarmEventForCreate = AlarmEvent.builder()
+                .eventId(UuidCreator.getTimeOrderedEpoch().toString())
+                .eventType(AlarmEvent.class.getName())
+                .timestamp(LocalDateTime.now())
+                .source(SourceType.SCM.name())
+                .alarmId(UuidCreator.getTimeOrderedEpoch().toString())
+                .alarmType(AlarmType.PR)
+                .targetId(targetId)
+                .targetType(TargetType.EMPLOYEE)
+                .title("발주서 승인")
+                .message("해당 발주서가 승인되었습니다. 발주서 번호 = " + productOrder.getProductOrderCode())
+                .linkId(productOrder.getProductOrderCode())
+                .linkType(LinkType.PURCHASE_ORDER)
+                .scheduledAt(null)
+                .build();
+
+            log.info("알림 요청 전송 준비 - alarmId: {}, targetId: {}, targetType: {}, linkType: {}",
+                alarmEventForCreate.getAlarmId(), targetId, alarmEventForCreate.getTargetType(),
+                alarmEventForCreate.getLinkType());
+            kafkaProducerService.sendAlarmEvent(alarmEventForCreate)
+                .whenComplete((result, ex) -> {
+                    if (ex != null) {
+                        log.error("[ALARM] 알림 요청 전송 실패 - alarmId: {}, targetId: {}, error: {}",
+                            alarmEventForCreate.getAlarmId(), targetId, ex.getMessage(), ex);
+                    } else if (result != null) {
+                        log.info("[ALARM] 알림 요청 전송 성공 - topic: {}, partition: {}, offset: {}",
+                            result.getRecordMetadata().topic(),
+                            result.getRecordMetadata().partition(),
+                            result.getRecordMetadata().offset());
+                    } else {
+                        log.warn("[ALARM] 알림 요청 전송 결과가 null 입니다 - alarmId: {}, targetId: {}",
+                            alarmEventForCreate.getAlarmId(), targetId);
+                    }
+                });
+
             // 3. MRP Run 상태 업데이트 (mrpRunId가 있는 경우만)
             List<ProductOrderItem> items = productOrderItemRepository.findByProductOrderId(purchaseOrderId);
             for (ProductOrderItem item : items) {
@@ -460,6 +504,45 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .build();
 
         productOrderApprovalRepository.save(updatedApproval);
+
+        // TODO 알람 완료 - 발주서 반려 -> 발주서 요청자
+        log.info("[ALARM] 발주서 반려 알림 생성 - : {}", purchaseOrderId);
+        String targetId = productOrder.getRequesterId();
+        AlarmEvent alarmEventForCreate = AlarmEvent.builder()
+            .eventId(UuidCreator.getTimeOrderedEpoch().toString())
+            .eventType(AlarmEvent.class.getName())
+            .timestamp(LocalDateTime.now())
+            .source(SourceType.SCM.name())
+            .alarmId(UuidCreator.getTimeOrderedEpoch().toString())
+            .alarmType(AlarmType.PR)
+            .targetId(targetId)
+            .targetType(TargetType.EMPLOYEE)
+            .title("발주서 반려")
+            .message(
+                "해당 발주서가 반려되었습니다. 반려 사유를 확인해주세요. 발주서 번호 = " + productOrder.getProductOrderCode())
+            .linkId(productOrder.getProductOrderCode())
+            .linkType(LinkType.PURCHASE_ORDER)
+            .scheduledAt(null)
+            .build();
+
+        log.info("[ALARM] 알림 요청 전송 준비 - alarmId: {}, targetId: {}, targetType: {}, linkType: {}",
+            alarmEventForCreate.getAlarmId(), targetId, alarmEventForCreate.getTargetType(),
+            alarmEventForCreate.getLinkType());
+        kafkaProducerService.sendAlarmEvent(alarmEventForCreate)
+            .whenComplete((result, ex) -> {
+                if (ex != null) {
+                    log.error("[ALARM] 알림 요청 전송 실패 - alarmId: {}, targetId: {}, error: {}",
+                        alarmEventForCreate.getAlarmId(), targetId, ex.getMessage(), ex);
+                } else if (result != null) {
+                    log.info("[ALARM] 알림 요청 전송 성공 - topic: {}, partition: {}, offset: {}",
+                        result.getRecordMetadata().topic(),
+                        result.getRecordMetadata().partition(),
+                        result.getRecordMetadata().offset());
+                } else {
+                    log.warn("[ALARM] 알림 요청 전송 결과가 null 입니다 - alarmId: {}, targetId: {}",
+                        alarmEventForCreate.getAlarmId(), targetId);
+                }
+            });
     }
 
     @Override
@@ -489,6 +572,44 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             productOrderApprovalRepository.save(approval);
             log.info("발주서 승인 상태 업데이트 - purchaseOrderId: {}, status: DELIVERING", purchaseOrderId);
         }
+
+        // TODO 알람 완료 - 배송 시작 -> 발주서 요청자
+        log.info("[ALARM] 발주서 배송 시작 알림 생성 - : {}", purchaseOrderId);
+        String targetId = productOrder.getRequesterId();
+        AlarmEvent alarmEventForCreate = AlarmEvent.builder()
+            .eventId(UuidCreator.getTimeOrderedEpoch().toString())
+            .eventType(AlarmEvent.class.getName())
+            .timestamp(LocalDateTime.now())
+            .source(SourceType.SCM.name())
+            .alarmId(UuidCreator.getTimeOrderedEpoch().toString())
+            .alarmType(AlarmType.PR)
+            .targetId(targetId)
+            .targetType(TargetType.EMPLOYEE)
+            .title("물품 배송 시작")
+            .message("해당 발주서의 물품 배송이 시작되었습니다. 발주서 번호 = " + productOrder.getProductOrderCode())
+            .linkId(productOrder.getProductOrderCode())
+            .linkType(LinkType.PURCHASE_ORDER)
+            .scheduledAt(null)
+            .build();
+
+        log.info("[ALARM] 알림 요청 전송 준비 - alarmId: {}, targetId: {}, targetType: {}, linkType: {}",
+            alarmEventForCreate.getAlarmId(), targetId, alarmEventForCreate.getTargetType(),
+            alarmEventForCreate.getLinkType());
+        kafkaProducerService.sendAlarmEvent(alarmEventForCreate)
+            .whenComplete((result, ex) -> {
+                if (ex != null) {
+                    log.error("[ALARM] 알림 요청 전송 실패 - alarmId: {}, targetId: {}, error: {}",
+                        alarmEventForCreate.getAlarmId(), targetId, ex.getMessage(), ex);
+                } else if (result != null) {
+                    log.info("[ALARM] 알림 요청 전송 성공 - topic: {}, partition: {}, offset: {}",
+                        result.getRecordMetadata().topic(),
+                        result.getRecordMetadata().partition(),
+                        result.getRecordMetadata().offset());
+                } else {
+                    log.warn("[ALARM] 알림 요청 전송 결과가 null 입니다 - alarmId: {}, targetId: {}",
+                        alarmEventForCreate.getAlarmId(), targetId);
+                }
+            });
 
         // 2. MRP Run 상태 업데이트 (mrpRunId가 있는 경우만)
         List<ProductOrderItem> items = productOrderItemRepository.findByProductOrderId(purchaseOrderId);
@@ -571,6 +692,44 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             productOrderApprovalRepository.save(approval);
             log.info("발주서 승인 상태 업데이트 - purchaseOrderId: {}, status: DELIVERED", purchaseOrderId);
         }
+
+        // TODO 알람 완료 - 입고 완료 알림 -> 발주서 요청자
+        log.info("[ALARM] 발주서 입고 알림 생성 - : {}", purchaseOrderId);
+        String targetId = productOrder.getRequesterId();
+        AlarmEvent alarmEventForCreate = AlarmEvent.builder()
+            .eventId(UuidCreator.getTimeOrderedEpoch().toString())
+            .eventType(AlarmEvent.class.getName())
+            .timestamp(LocalDateTime.now())
+            .source(SourceType.SCM.name())
+            .alarmId(UuidCreator.getTimeOrderedEpoch().toString())
+            .alarmType(AlarmType.PR)
+            .targetId(targetId)
+            .targetType(TargetType.EMPLOYEE)
+            .title("물품 입고 완료")
+            .message("해당 발주서의 물품이 창고에 입고되었습니다. 발주서 번호 = " + productOrder.getProductOrderCode())
+            .linkId(productOrder.getProductOrderCode())
+            .linkType(LinkType.PURCHASE_ORDER)
+            .scheduledAt(null)
+            .build();
+
+        log.info("[ALARM] 알림 요청 전송 준비 - alarmId: {}, targetId: {}, targetType: {}, linkType: {}",
+            alarmEventForCreate.getAlarmId(), targetId, alarmEventForCreate.getTargetType(),
+            alarmEventForCreate.getLinkType());
+        kafkaProducerService.sendAlarmEvent(alarmEventForCreate)
+            .whenComplete((result, ex) -> {
+                if (ex != null) {
+                    log.error("[ALARM] 알림 요청 전송 실패 - alarmId: {}, targetId: {}, error: {}",
+                        alarmEventForCreate.getAlarmId(), targetId, ex.getMessage(), ex);
+                } else if (result != null) {
+                    log.info("[ALARM] 알림 요청 전송 성공 - topic: {}, partition: {}, offset: {}",
+                        result.getRecordMetadata().topic(),
+                        result.getRecordMetadata().partition(),
+                        result.getRecordMetadata().offset());
+                } else {
+                    log.warn("[ALARM] 알림 요청 전송 결과가 null 입니다 - alarmId: {}, targetId: {}",
+                        alarmEventForCreate.getAlarmId(), targetId);
+                }
+            });
 
         // 2. 재고 증가 및 MRP Run 상태 업데이트
         List<ProductOrderItem> items = productOrderItemRepository.findByProductOrderId(purchaseOrderId);

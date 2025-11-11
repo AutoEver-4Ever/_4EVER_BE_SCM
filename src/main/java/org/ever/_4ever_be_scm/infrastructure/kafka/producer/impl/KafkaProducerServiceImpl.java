@@ -1,16 +1,21 @@
 package org.ever._4ever_be_scm.infrastructure.kafka.producer.impl;
 
+import static org.ever._4ever_be_scm.infrastructure.kafka.config.KafkaTopicConfig.ALARM_REQUEST_TOPIC;
+import static org.ever._4ever_be_scm.infrastructure.kafka.config.KafkaTopicConfig.BUSINESS_EVENT_TOPIC;
+import static org.ever._4ever_be_scm.infrastructure.kafka.config.KafkaTopicConfig.SCM_EVENT_TOPIC;
+import static org.ever._4ever_be_scm.infrastructure.kafka.config.KafkaTopicConfig.USER_EVENT_TOPIC;
+
+import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.ever._4ever_be_scm.infrastructure.kafka.event.*;
+import org.ever._4ever_be_scm.infrastructure.kafka.event.BusinessEvent;
+import org.ever._4ever_be_scm.infrastructure.kafka.event.ScmEvent;
+import org.ever._4ever_be_scm.infrastructure.kafka.event.UserEvent;
 import org.ever._4ever_be_scm.infrastructure.kafka.producer.KafkaProducerService;
+import org.ever.event.AlarmEvent;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
-
-import java.util.concurrent.CompletableFuture;
-
-import static org.ever._4ever_be_scm.infrastructure.kafka.config.KafkaTopicConfig.*;
 
 @Slf4j
 @Service
@@ -20,7 +25,8 @@ public class KafkaProducerServiceImpl implements KafkaProducerService {
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
     @Override
-    public CompletableFuture<SendResult<String, Object>> sendScmEventToTopic(String topic, ScmEvent event) {
+    public CompletableFuture<SendResult<String, Object>> sendScmEventToTopic(String topic,
+        ScmEvent event) {
         return sendEvent(topic, event.getOrderId(), event);
     }
 
@@ -41,7 +47,7 @@ public class KafkaProducerServiceImpl implements KafkaProducerService {
 
     @Override
     public CompletableFuture<SendResult<String, Object>> sendAlarmEvent(AlarmEvent event) {
-        return sendEvent(ALARM_EVENT_TOPIC, event.getUserId(), event);
+        return sendEvent(ALARM_REQUEST_TOPIC, event.getAlarmId(), event);
     }
 
     @Override
@@ -57,18 +63,21 @@ public class KafkaProducerServiceImpl implements KafkaProducerService {
     }
 
     @Override
-    public CompletableFuture<SendResult<String, Object>> sendToTopic(String topic, String key, Object event) {
+    public CompletableFuture<SendResult<String, Object>> sendToTopic(String topic, String key,
+        Object event) {
         return sendEvent(topic, key, event);
     }
 
     /**
      * 공통 이벤트 발행 메서드
      */
-    private CompletableFuture<SendResult<String, Object>> sendEvent(String topic, String key, Object event) {
+    private CompletableFuture<SendResult<String, Object>> sendEvent(String topic, String key,
+        Object event) {
         log.info("이벤트 발행 시작 - Topic: {}, Key: {}, EventType: {}",
             topic, key, event.getClass().getSimpleName());
 
-        CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(topic, key, event);
+        CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(topic, key,
+            event);
 
         future.whenComplete((result, ex) -> {
             if (ex != null) {
@@ -76,7 +85,8 @@ public class KafkaProducerServiceImpl implements KafkaProducerService {
                     topic, key, ex.getMessage(), ex);
             } else {
                 log.info("이벤트 발행 성공 - Topic: {}, Partition: {}, Offset: {}",
-                    topic, result.getRecordMetadata().partition(), result.getRecordMetadata().offset());
+                    topic, result.getRecordMetadata().partition(),
+                    result.getRecordMetadata().offset());
             }
         });
 

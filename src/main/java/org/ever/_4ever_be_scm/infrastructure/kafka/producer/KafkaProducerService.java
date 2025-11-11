@@ -1,9 +1,11 @@
 package org.ever._4ever_be_scm.infrastructure.kafka.producer;
 
-import org.ever._4ever_be_scm.infrastructure.kafka.event.*;
-import org.springframework.kafka.support.SendResult;
-
 import java.util.concurrent.CompletableFuture;
+import org.ever._4ever_be_scm.infrastructure.kafka.event.BusinessEvent;
+import org.ever._4ever_be_scm.infrastructure.kafka.event.ScmEvent;
+import org.ever._4ever_be_scm.infrastructure.kafka.event.UserEvent;
+import org.ever.event.AlarmEvent;
+import org.springframework.kafka.support.SendResult;
 
 /**
  * Kafka Producer 서비스 인터페이스
@@ -43,5 +45,6 @@ public interface KafkaProducerService {
     /**
      * 특정 토픽으로 이벤트 발행 (범용)
      */
-    CompletableFuture<SendResult<String, Object>> sendToTopic(String topic, String key, Object event);
+    CompletableFuture<SendResult<String, Object>> sendToTopic(String topic, String key,
+        Object event);
 }

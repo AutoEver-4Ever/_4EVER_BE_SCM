@@ -306,6 +306,7 @@ public class MesServiceImpl implements MesService {
             String transactionId = java.util.UUID.randomUUID().toString();
             asyncResultManager.registerResult(transactionId, deferredResult);
 
+
             // 6. Business 서버로 Order 상태 변경 이벤트 발행
             MesStartEvent event = MesStartEvent.builder()
                     .transactionId(transactionId)
